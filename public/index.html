@@ -1,145 +1,4 @@
-// ==================== CLOUDFLARE WORKER ====================
-// Feedback Dashboard - Frontend hosted on Cloudflare
-// Backend: Google Apps Script JSON API
-
-// ⚠️ THAY URL NÀY BẰNG URL APPS SCRIPT CỦA BẠN (SAU KHI DEPLOY MỚI)
-const API_URL = 'https://api-feedback.f1genz.dev/api/exec';
-
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-
-    // Handle R2 upload directly in worker
-    if (url.pathname === '/api/upload-image' && request.method === 'POST') {
-      return handleImageUpload(request, env);
-    }
-
-    if (url.pathname.startsWith('/api/')) {
-      return handleApiRequest(request, url);
-    }
-
-    return new Response(HTML_CONTENT, {
-      headers: { 
-        'Content-Type': 'text/html; charset=utf-8', 
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'X-Build-Time': '2026-01-10T10:05:00'
-      }
-    });
-  }
-}
-
-async function handleImageUpload(request, env) {
-  try {
-    const { imageData } = await request.json();
-    
-    if (!imageData || !imageData.startsWith('data:image')) {
-      return new Response(JSON.stringify({ success: false, message: 'Invalid image data' }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
-    const matches = imageData.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!matches) {
-      return new Response(JSON.stringify({ success: false, message: 'Invalid image format' }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
-    const imageType = matches[1];
-    const base64Data = matches[2];
-    
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    
-    const filename = `comments/${Date.now()}-${crypto.randomUUID()}.${imageType}`;
-    
-    await env.IMAGES.put(filename, bytes, {
-      httpMetadata: {
-        contentType: `image/${imageType}`
-      }
-    });
-    
-    const publicUrl = `https://images.f1genz.dev/${filename}`;
-    
-    return new Response(JSON.stringify({ success: true, url: publicUrl }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ success: false, message: error.message }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-}
-
-async function handleApiRequest(request, url) {
-  const action = url.pathname.replace('/api/', '');
-  const params = url.searchParams;
-
-  try {
-    let response;
-    if (request.method === 'POST') {
-      const body = await request.text();
-      response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': 'd0042f16f1e0ba3a5d9e4d60bf46bdfbad50d8aa'
-        },
-        body: JSON.stringify({ action, ...JSON.parse(body) }),
-        redirect: 'follow'
-      });
-    } else {
-      // Build URL for GET requests
-      let apiUrl;
-      
-      // Special handling for direct endpoints (not using action pattern)
-      if (action === 'telegram-image') {
-        apiUrl = `${API_URL.replace('/exec', '')}/${action}?`;
-        for (const [key, value] of params) {
-          apiUrl += `${key}=${encodeURIComponent(value)}&`;
-        }
-        apiUrl = apiUrl.slice(0, -1); // Remove trailing &
-      } else {
-        // Standard action-based endpoints
-        apiUrl = `${API_URL}?action=${action}`;
-        for (const [key, value] of params) {
-          apiUrl += `&${key}=${encodeURIComponent(value)}`;
-        }
-      }
-      
-      response = await fetch(apiUrl, {
-        redirect: 'follow',
-        headers: {
-          'Accept': 'application/json',
-          'x-api-key': 'd0042f16f1e0ba3a5d9e4d60bf46bdfbad50d8aa'
-        }
-      });
-    }
-
-    const text = await response.text();
-    if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
-      return new Response(JSON.stringify({ success: false, message: 'API chưa deploy' }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
-    }
-
-    return new Response(text, {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ success: false, message: error.message }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-}
-
-// ==================== HTML CONTENT ====================
-const HTML_CONTENT = `<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -1059,24 +918,24 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
     function renderStats(stats) {
       const total = Object.values(stats.byStage || {}).reduce((a, b) => a + b, 0);
-      document.getElementById('statsGrid').innerHTML = \`
+      document.getElementById('statsGrid').innerHTML = `
         <div class="stat-card" style="background:rgba(255,255,255,0.2);">
-          <div class="number">\${total}</div>
+          <div class="number">${total}</div>
           <div class="label">Tất cả</div>
         </div>
         <div class="stat-card done">
-          <div class="number">\${stats.done}</div>
+          <div class="number">${stats.done}</div>
           <div class="label">Done</div>
         </div>
         <div class="stat-card pending">
-          <div class="number">\${stats.pending}</div>
+          <div class="number">${stats.pending}</div>
           <div class="label">Feedback</div>
         </div>
         <div class="stat-card deadline">
-          <div class="number">\${stats.byStage && stats.byStage['Pending'] || 0}</div>
+          <div class="number">${stats.byStage && stats.byStage['Pending'] || 0}</div>
           <div class="label">Pending</div>
         </div>
-      \`;\n    }
+      `;\n    }
 
     function renderFilterOptions(options, savedStage) {
       cachedHosts = options.hosts || [];
@@ -1175,43 +1034,43 @@ const HTML_CONTENT = `<!DOCTYPE html>
         return;
       }
       
-      document.getElementById('feedbackTableBody').innerHTML = rows.map((r, i) => \`
+      document.getElementById('feedbackTableBody').innerHTML = rows.map((r, i) => `
         <tr>
-          <td><input type="checkbox" class="row-checkbox" data-row="\${r.rowNumber}" \${selectedRows.has(r.rowNumber) ? 'checked' : ''} onclick="toggleSelectRow(\${r.rowNumber})"></td>
-          <td>\${start + i + 1}</td>
+          <td><input type="checkbox" class="row-checkbox" data-row="${r.rowNumber}" ${selectedRows.has(r.rowNumber) ? 'checked' : ''} onclick="toggleSelectRow(${r.rowNumber})"></td>
+          <td>${start + i + 1}</td>
           <td class="shop-name">
-            <a href="https://\${r.shop}/admin" target="_blank" style="color:var(--primary);text-decoration:none;">\${r.shop || '-'}</a>
-            <div class="tag-list">\${renderTags(r.tags)}</div>
+            <a href="https://${r.shop}/admin" target="_blank" style="color:var(--primary);text-decoration:none;">${r.shop || '-'}</a>
+            <div class="tag-list">${renderTags(r.tags)}</div>
           </td>
-          <td><strong>\${r.host || '-'}</strong></td>
-          <td class="note-text" title="\${escapeHtml(r.note || r.message || '')}">
+          <td><strong>${r.host || '-'}</strong></td>
+          <td class="note-text" title="${escapeHtml(r.note || r.message || '')}">
             <div style="display:flex; align-items:center; gap:4px;">
-              <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">\${r.note || r.message || '-'}</span>
+              <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r.note || r.message || '-'}</span>
               <span style="flex-shrink:0; font-size:14px;">
-                \${r.devNote ? '📝' : ''}\${(r.imageNote || r.imageId) ? '📷' : ''}
+                ${r.devNote ? '📝' : ''}${(r.imageNote || r.imageId) ? '📷' : ''}
               </span>
             </div>
           </td>
           <td>
             <div class="stage-dropdown">
-              <span class="stage-badge \${getStageClass(r.stage)}">\${r.stage || '-'}</span>
+              <span class="stage-badge ${getStageClass(r.stage)}">${r.stage || '-'}</span>
               <div class="stage-dropdown-content">
-                <a href="#" onclick="quickUpdate(\${r.rowNumber}, 'Feedback'); return false;">🔄 Feedback</a>
-                <a href="#" onclick="quickUpdate(\${r.rowNumber}, 'Đã báo khách'); return false;">📤 Đã báo</a>
-                <a href="#" onclick="quickUpdate(\${r.rowNumber}, 'Done'); return false;">✅ Done</a>
-                <a href="#" onclick="quickUpdate(\${r.rowNumber}, 'Pending'); return false;">⏳ Pending</a>
+                <a href="#" onclick="quickUpdate(${r.rowNumber}, 'Feedback'); return false;">🔄 Feedback</a>
+                <a href="#" onclick="quickUpdate(${r.rowNumber}, 'Đã báo khách'); return false;">📤 Đã báo</a>
+                <a href="#" onclick="quickUpdate(${r.rowNumber}, 'Done'); return false;">✅ Done</a>
+                <a href="#" onclick="quickUpdate(${r.rowNumber}, 'Pending'); return false;">⏳ Pending</a>
               </div>
             </div>
           </td>
-          <td style="font-size:10px; white-space:nowrap;">\${formatVNTime(r.time)}</td>
-          <td style="font-size:10px;">\${formatVNTime(r.deadline)}</td>
+          <td style="font-size:10px; white-space:nowrap;">${formatVNTime(r.time)}</td>
+          <td style="font-size:10px;">${formatVNTime(r.deadline)}</td>
           <td style="white-space:nowrap;">
-            <button class="action-btn view" onclick="viewDetail(\${r.rowNumber})">Xem</button>
-            <button class="action-btn" style="background:#fee2e2;color:#dc2626;" onclick="deleteFeedback(\${r.rowNumber})">Xóa</button>
-            \${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="window.open(\\'' + r.link + '\\', \\'_blank\\')">Link</button>' : ''}
+            <button class="action-btn view" onclick="viewDetail(${r.rowNumber})">Xem</button>
+            <button class="action-btn" style="background:#fee2e2;color:#dc2626;" onclick="deleteFeedback(${r.rowNumber})">Xóa</button>
+            ${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="window.open(\\'' + r.link + '\\', \\'_blank\\')">Link</button>' : ''}
           </td>
         </tr>
-      \`).join('');
+      `).join('');
       
       renderPagination();
     }
@@ -1219,14 +1078,14 @@ const HTML_CONTENT = `<!DOCTYPE html>
     function renderPagination() {
       const total = Math.ceil(allFeedback.length / itemsPerPage);
       if (total <= 1) {
-        document.getElementById('pagination').innerHTML = \`<span style="color:var(--gray);">Tổng: \${allFeedback.length}</span>\`;
+        document.getElementById('pagination').innerHTML = `<span style="color:var(--gray);">Tổng: ${allFeedback.length}</span>`;
         return;
       }
-      document.getElementById('pagination').innerHTML = \`
-        <span style="color:var(--gray);margin-right:8px;">\${currentPage}/\${total}</span>
-        \${currentPage > 1 ? \`<button onclick="goToPage(\${currentPage-1})">←</button>\` : ''}
-        \${currentPage < total ? \`<button onclick="goToPage(\${currentPage+1})">→</button>\` : ''}
-      \`;
+      document.getElementById('pagination').innerHTML = `
+        <span style="color:var(--gray);margin-right:8px;">${currentPage}/${total}</span>
+        ${currentPage > 1 ? `<button onclick="goToPage(${currentPage-1})">←</button>` : ''}
+        ${currentPage < total ? `<button onclick="goToPage(${currentPage+1})">→</button>` : ''}
+      `;
     }
 
     function goToPage(p) { currentPage = p; renderTable(); saveState(); }
@@ -1393,7 +1252,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
       
       const sel = document.getElementById('createHost');
       sel.innerHTML = '<option value="">-- Chọn --</option>';
-      cachedHosts.forEach(h => sel.innerHTML += \`<option value="\${h}">\${h}</option>\`);
+      cachedHosts.forEach(h => sel.innerHTML += `<option value="${h}">${h}</option>`);
       
       document.getElementById('createModal').classList.add('active');
     }
@@ -1433,7 +1292,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
       
       const sel = document.getElementById('editHost');
       sel.innerHTML = '';
-      cachedHosts.forEach(h => sel.innerHTML += \`<option value="\${h}" \${h === item.host ? 'selected' : ''}>\${h}</option>\`);
+      cachedHosts.forEach(h => sel.innerHTML += `<option value="${h}" ${h === item.host ? 'selected' : ''}>${h}</option>`);
       
       // Disable all inputs by default (View Mode)
       setFormDisabled(true);
@@ -1864,27 +1723,27 @@ const HTML_CONTENT = `<!DOCTYPE html>
       typeOrder.forEach(type => {
         if (!data[type] || data[type].length === 0) return;
         
-        html += \`
+        html += `
           <div class="guide-group">
-            <div class="guide-group-title">\${typeIcons[type] || '📄'} \${type} (\${data[type].length})</div>
+            <div class="guide-group-title">${typeIcons[type] || '📄'} ${type} (${data[type].length})</div>
             <div class="guides-grid">
-        \`;
+        `;
         
         data[type].forEach(guide => {
-          html += \`
+          html += `
             <div class="guide-card">
               <div class="guide-info">
-                \${guide.link ? \`<a href="\${guide.link}" target="_blank" class="guide-title-link" title="\${escapeHtml(guide.template)}">\${escapeHtml(guide.template)}</a>\` : \`<div class="guide-title" title="\${escapeHtml(guide.template)}">\${escapeHtml(guide.template)}</div>\`}
+                ${guide.link ? `<a href="${guide.link}" target="_blank" class="guide-title-link" title="${escapeHtml(guide.template)}">${escapeHtml(guide.template)}</a>` : `<div class="guide-title" title="${escapeHtml(guide.template)}">${escapeHtml(guide.template)}</div>`}
                 <div class="guide-links">
-                  \${guide.link ? \`<button class="guide-link copy" onclick="copyLink('\${guide.link}', this)">📋 Copy</button>\` : ''}
+                  ${guide.link ? `<button class="guide-link copy" onclick="copyLink('${guide.link}', this)">📋 Copy</button>` : ''}
                 </div>
               </div>
               <div class="guide-actions">
-                <button class="guide-action-btn edit" onclick="openEditGuideModal(\${guide.rowNumber})">⚙️</button>
-                <button class="guide-action-btn delete" onclick="deleteGuide(\${guide.rowNumber})">🗑️</button>
+                <button class="guide-action-btn edit" onclick="openEditGuideModal(${guide.rowNumber})">⚙️</button>
+                <button class="guide-action-btn delete" onclick="deleteGuide(${guide.rowNumber})">🗑️</button>
               </div>
             </div>
-          \`;
+          `;
         });
         
         html += '</div></div>';
@@ -1894,28 +1753,28 @@ const HTML_CONTENT = `<!DOCTYPE html>
       Object.keys(data).forEach(type => {
         if (typeOrder.includes(type) || !data[type] || data[type].length === 0) return;
         
-        html += \`
+        html += `
           <div class="guide-group">
-            <div class="guide-group-title">📄 \${type} (\${data[type].length})</div>
+            <div class="guide-group-title">📄 ${type} (${data[type].length})</div>
             <div class="guides-grid">
-        \`;
+        `;
         
         data[type].forEach(guide => {
-          html += \`
+          html += `
             <div class="guide-card">
-              <div class="guide-icon">\${typeIcons[type] || '📄'}</div>
+              <div class="guide-icon">${typeIcons[type] || '📄'}</div>
               <div class="guide-info">
-                \${guide.link ? \`<a href="\${guide.link}" target="_blank" class="guide-title-link" title="\${escapeHtml(guide.template)}">\${escapeHtml(guide.template)}</a>\` : \`<div class="guide-title" title="\${escapeHtml(guide.template)}">\${escapeHtml(guide.template)}</div>\`}
+                ${guide.link ? `<a href="${guide.link}" target="_blank" class="guide-title-link" title="${escapeHtml(guide.template)}">${escapeHtml(guide.template)}</a>` : `<div class="guide-title" title="${escapeHtml(guide.template)}">${escapeHtml(guide.template)}</div>`}
                 <div class="guide-links">
-                  \${guide.link ? \`<button class="guide-link copy" onclick="copyLink('\${guide.link}', this)">📋 Copy</button>\` : ''}
+                  ${guide.link ? `<button class="guide-link copy" onclick="copyLink('${guide.link}', this)">📋 Copy</button>` : ''}
                 </div>
               </div>
               <div class="guide-actions">
-                <button class="guide-action-btn edit" onclick="openEditGuideModal(\${guide.rowNumber})">⚙️</button>
-                <button class="guide-action-btn delete" onclick="deleteGuide(\${guide.rowNumber})">🗑️</button>
+                <button class="guide-action-btn edit" onclick="openEditGuideModal(${guide.rowNumber})">⚙️</button>
+                <button class="guide-action-btn delete" onclick="deleteGuide(${guide.rowNumber})">🗑️</button>
               </div>
             </div>
-          \`;
+          `;
         });
         
         html += '</div></div>';
@@ -2030,4 +1889,4 @@ const HTML_CONTENT = `<!DOCTYPE html>
     // setInterval(loadDashboard, 5 * 60 * 1000);
   </script>
 </body>
-</html>`;
+</html>

@@ -1,8 +1,12 @@
 # Feedback Dashboard Worker
 name = "feedback"
-main = "worker.js"
+main = "worker copy.js"
 compatibility_date = "2026-01-08"
 workers_dev = true
+
+# Static Assets (HTML/CSS/JS)
+[assets]
+directory = "./public"
 
 # Optional: uncomment to use custom domain
 routes = [

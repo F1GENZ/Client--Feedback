@@ -803,7 +803,7 @@
       
       if (selectedRows.size > 0) {
         bar.style.display = 'flex';
-        countEl.textContent = selectedRows.size + ' m\u1ee5c \u0111\u01b0\u1ee3c ch\u1ecdn';
+        countEl.textContent = selectedRows.size + ' mục được chọn';
       } else {
         bar.style.display = 'none';
       }
@@ -812,43 +812,43 @@
     async function bulkMarkDone() {
       if (selectedRows.size === 0) return;
       
-      showToast('\u0110ang c\u1eadp nh\u1eadt ' + selectedRows.size + ' m\u1ee5c...');
+      showToast('Đang cập nhật ' + selectedRows.size + ' mục...');
       try {
         const result = await apiPost('bulkUpdateStage', {
           rowNumbers: Array.from(selectedRows),
           newStage: 'Done'
         });
         if (result.success) {
-          showToast('\u2705 ' + result.message, 'success');
+          showToast('✅ ' + result.message, 'success');
           clearSelection();
           loadDashboard();
         } else {
-          showToast('L\u1ed7i: ' + result.message, 'error');
+          showToast('Lỗi: ' + result.message, 'error');
         }
       } catch (e) {
-        showToast('L\u1ed7i: ' + e.message, 'error');
+        showToast('Lỗi: ' + e.message, 'error');
       }
     }
 
     async function bulkDeleteSelected() {
       if (selectedRows.size === 0) return;
       
-      if (!confirm('X\u00f3a ' + selectedRows.size + ' m\u1ee5c \u0111\u00e3 ch\u1ecdn? H\u00e0nh \u0111\u1ed9ng n\u00e0y kh\u00f4ng th\u1ec3 ho\u00e0n t\u00e1c.')) return;
+      if (!confirm('Xóa ' + selectedRows.size + ' mục đã chọn? Hành động này không thể hoàn tác.')) return;
       
-      showToast('\u0110ang x\u00f3a ' + selectedRows.size + ' m\u1ee5c...');
+      showToast('Đang xóa ' + selectedRows.size + ' mục...');
       try {
         const result = await apiPost('bulkDelete', {
           rowNumbers: Array.from(selectedRows)
         });
         if (result.success) {
-          showToast('\u2705 ' + result.message, 'success');
+          showToast('✅ ' + result.message, 'success');
           clearSelection();
           loadDashboard();
         } else {
-          showToast('L\u1ed7i: ' + result.message, 'error');
+          showToast('Lỗi: ' + result.message, 'error');
         }
       } catch (e) {
-        showToast('L\u1ed7i: ' + e.message, 'error');
+        showToast('Lỗi: ' + e.message, 'error');
       }
     }
 
@@ -935,7 +935,8 @@
           <div class="number">${stats.byStage && stats.byStage['Pending'] || 0}</div>
           <div class="label">Pending</div>
         </div>
-      `;\n    }
+      `;
+    }
 
     function renderFilterOptions(options, savedStage) {
       cachedHosts = options.hosts || [];
@@ -994,7 +995,7 @@
       // Input format: "HH:mm:ss dd/MM/yyyy" hoặc "dd/MM/yyyy HH:mm:ss" hoặc "yyyy-MM-dd"
       try {
         // Check ISO format yyyy-MM-dd (deadline)
-        if (/^\\d{4}-\\d{2}-\\d{2}$/.test(timeStr)) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(timeStr)) {
           const [yyyy, mm, dd] = timeStr.split('-');
           return dd + '/' + mm + '/' + yyyy;
         }
@@ -1067,7 +1068,7 @@
           <td style="white-space:nowrap;">
             <button class="action-btn view" onclick="viewDetail(${r.rowNumber})">Xem</button>
             <button class="action-btn" style="background:#fee2e2;color:#dc2626;" onclick="deleteFeedback(${r.rowNumber})">Xóa</button>
-            ${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="window.open(\\'' + r.link + '\\', \\'_blank\\')">Link</button>' : ''}
+            ${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="window.open(\'' + r.link + '\', \'_blank\')">Link</button>' : ''}
           </td>
         </tr>
       `).join('');
@@ -1419,7 +1420,7 @@
               '<span style="color: #F30; font-weight: bold; display:flex; align-items:center; gap:.25rem;"><svg width="12" height="12" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /> </svg>' + (c.author || 'User') + '</span>' +
               '<div style="display:flex; gap:8px; align-items:center;">' +
                 '<span>' + (c.time || '') + '</span>' +
-                '<button onclick="deleteComment(' + idx + ')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:14px; padding:0; line-height:1;" title="Xoa">\u00d7</button>' +
+                '<button onclick="deleteComment(' + idx + ')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:14px; padding:0; line-height:1;" title="Xoa">×</button>' +
               '</div>' +
             '</div>' +
             (imageData ? '<div style="margin-bottom:8px;"><img id="' + imgId + '" src="' + escapeHtml(imageData) + '" style="max-width:200px; border-radius:8px; cursor:pointer;"></div>' : '') +
@@ -1533,7 +1534,7 @@
         try {
           const uploadResult = await apiPost('upload-image', { imageData: currentCommentImage });
           if (uploadResult.success) {
-            commentContent = text + '\\n[IMAGE]' + uploadResult.url;
+            commentContent = text + '\n[IMAGE]' + uploadResult.url;
           } else {
             showToast('Lỗi upload ảnh: ' + uploadResult.message, 'error');
             return;
@@ -1544,7 +1545,7 @@
         }
       }
       
-      if (!commentContent || commentContent === '\\n[IMAGE]') { 
+      if (!commentContent || commentContent === '\n[IMAGE]') { 
         showToast('Nhập nội dung comment', 'error'); 
         return; 
       }

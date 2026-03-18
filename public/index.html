@@ -916,7 +916,7 @@
       }
     }
 
-    function filterByStatCard(stage) {
+    function filterByStatCard(stage, el) {
       const select = document.getElementById('filterStage');
       if (select) {
         select.value = stage === 'all' ? 'all' : stage;
@@ -924,25 +924,25 @@
       }
       // Highlight active card
       document.querySelectorAll('.stat-card').forEach(card => card.classList.remove('active'));
-      event.currentTarget.classList.add('active');
+      if (el) el.classList.add('active');
     }
 
     function renderStats(stats) {
       const total = Object.values(stats.byStage || {}).reduce((a, b) => a + b, 0);
       document.getElementById('statsGrid').innerHTML = `
-        <div class="stat-card" style="background:rgba(255,255,255,0.2);" onclick="filterByStatCard('all')" title="Hiện tất cả">
+        <div class="stat-card" style="background:rgba(255,255,255,0.2);" onclick="filterByStatCard('all', this)" title="Hiện tất cả">
           <div class="number">${total}</div>
           <div class="label">Tất cả</div>
         </div>
-        <div class="stat-card done" onclick="filterByStatCard('Done')" title="Lọc Done">
+        <div class="stat-card done" onclick="filterByStatCard('Done', this)" title="Lọc Done">
           <div class="number">${stats.done}</div>
           <div class="label">Done</div>
         </div>
-        <div class="stat-card pending" onclick="filterByStatCard('Feedback')" title="Lọc Feedback">
+        <div class="stat-card pending" onclick="filterByStatCard('Feedback', this)" title="Lọc Feedback">
           <div class="number">${stats.pending}</div>
           <div class="label">Feedback</div>
         </div>
-        <div class="stat-card deadline" onclick="filterByStatCard('Pending')" title="Lọc Pending">
+        <div class="stat-card deadline" onclick="filterByStatCard('Pending', this)" title="Lọc Pending">
           <div class="number">${stats.byStage && stats.byStage['Pending'] || 0}</div>
           <div class="label">Pending</div>
         </div>

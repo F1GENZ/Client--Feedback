@@ -232,8 +232,10 @@
     .guide-group { margin-bottom: 20px; }
     .guide-group-title { font-size: 13px; font-weight: 600; color: var(--dark); margin-bottom: 10px; padding: 6px 12px; background: var(--light); border-left: 3px solid var(--primary); border-radius: 0 4px 4px 0; display: inline-block; }
     .guides-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
-    .guide-card { background: var(--white); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; transition: all 0.2s; display: flex; align-items: flex-start; gap: 10px; }
+    .guide-card { background: var(--white); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; transition: all 0.2s; display: flex; align-items: flex-start; gap: 10px; cursor: grab; user-select: none; }
     .guide-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-color: var(--primary); }
+    .guide-card.dragging { opacity: 0.4; transform: scale(0.98); border: 2px dashed var(--primary); }
+    .guide-card.drag-over { border-color: var(--success); box-shadow: 0 0 0 2px rgba(16,185,129,0.3); }
     .guide-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; background: var(--light); }
     .guide-info { flex: 1; min-width: 0; }
     .guide-title { font-weight: 600; color: var(--dark); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -246,6 +248,15 @@
     .guide-actions { display: flex; gap: 2px; align-self: flex-start; }
     .guide-action-btn { padding: 3px 5px; border: none; border-radius: 3px; font-size: 11px; cursor: pointer; transition: all 0.2s; line-height: 1; background: var(--light); }
     .guide-action-btn:hover { background: var(--border); }
+    .guide-order-hint { font-size: 10px; color: var(--gray); opacity: 0.7; padding: 2px 0 6px; }
+    /* Combo Type Input */
+    .type-combo { display: flex; gap: 8px; align-items: center; }
+    .type-combo select { flex: 1; }
+    .type-combo input { flex: 1; display: none; }
+    .type-combo.custom-mode select { display: none; }
+    .type-combo.custom-mode input { display: block; }
+    .type-combo .type-toggle-btn { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--light); cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s; }
+    .type-combo .type-toggle-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
 
     /* Theme Toggle & Hamburger */
     .theme-toggle { width: 40px; height: 40px; border: none; border-radius: 50%; background: rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
@@ -572,11 +583,15 @@
       <div class="modal-body">
         <div class="form-group">
           <label>Loại *</label>
-          <select id="createGuideType">
-            <option value="Hướng dẫn">Hướng dẫn</option>
-            <option value="Tool">Tool</option>
-            <option value="Web">Web</option>
-          </select>
+          <div class="type-combo" id="createTypeCombo">
+            <select id="createGuideType" onchange="onTypeSelectChange('create')">
+              <option value="Hướng dẫn">Hướng dẫn</option>
+              <option value="Tool">Tool</option>
+              <option value="Web">Web</option>
+            </select>
+            <input type="text" id="createGuideTypeCustom" placeholder="Nhập loại mới...">
+            <button type="button" class="type-toggle-btn" onclick="toggleTypeMode('create')" title="Tạo loại mới">➕ Mới</button>
+          </div>
         </div>
         <div class="form-group">
           <label>Tên Template *</label>
@@ -605,12 +620,15 @@
         <input type="hidden" id="editGuideRowNumber">
         <div class="form-group">
           <label>Loại *</label>
-          <select id="editGuideType">
-            <option value="Hướng dẫn">Hướng dẫn</option>
-            <option value="Tool">Tool</option>
-            <option value="Web">Web</option>
-            <option value="Multilanguage F1GenZ">Multilanguage F1GenZ</option>
-          </select>
+          <div class="type-combo" id="editTypeCombo">
+            <select id="editGuideType" onchange="onTypeSelectChange('edit')">
+              <option value="Hướng dẫn">Hướng dẫn</option>
+              <option value="Tool">Tool</option>
+              <option value="Web">Web</option>
+            </select>
+            <input type="text" id="editGuideTypeCustom" placeholder="Nhập loại mới...">
+            <button type="button" class="type-toggle-btn" onclick="toggleTypeMode('edit')" title="Tạo loại mới">➕ Mới</button>
+          </div>
         </div>
         <div class="form-group">
           <label>Tên Template *</label>
@@ -1633,6 +1651,85 @@
     let groupedGuides = {};
     let guidesLoaded = false;
 
+    // ==================== GUIDE ORDER (localStorage per-user) ====================
+    function getGuideOrderKey() {
+      // Each user is identified by the currently selected host tab
+      return 'guideOrder_' + (selectedHost || 'all');
+    }
+
+    function getGuideOrder(type) {
+      try {
+        const saved = localStorage.getItem(getGuideOrderKey());
+        if (!saved) return null;
+        const orders = JSON.parse(saved);
+        return orders[type] || null;
+      } catch (e) { return null; }
+    }
+
+    function saveGuideOrder(type, rowNumbers) {
+      try {
+        const key = getGuideOrderKey();
+        let orders = {};
+        const saved = localStorage.getItem(key);
+        if (saved) orders = JSON.parse(saved);
+        orders[type] = rowNumbers;
+        localStorage.setItem(key, JSON.stringify(orders));
+      } catch (e) { console.error('Failed to save guide order', e); }
+    }
+
+    function applyGuideOrder(guides, type) {
+      const order = getGuideOrder(type);
+      if (!order || order.length === 0) return guides;
+      // Sort by saved order, items not in order go to end
+      const orderMap = {};
+      order.forEach((rn, i) => orderMap[rn] = i);
+      return [...guides].sort((a, b) => {
+        const oa = orderMap[a.rowNumber] !== undefined ? orderMap[a.rowNumber] : 9999;
+        const ob = orderMap[b.rowNumber] !== undefined ? orderMap[b.rowNumber] : 9999;
+        return oa - ob;
+      });
+    }
+
+    // ==================== TYPE COMBO (custom category) ====================
+    function toggleTypeMode(mode) {
+      const combo = document.getElementById(mode + 'TypeCombo');
+      const isCustom = combo.classList.contains('custom-mode');
+      const btn = combo.querySelector('.type-toggle-btn');
+      if (isCustom) {
+        combo.classList.remove('custom-mode');
+        btn.textContent = '➕ Mới';
+        btn.title = 'Tạo loại mới';
+      } else {
+        combo.classList.add('custom-mode');
+        btn.textContent = '📋 Chọn';
+        btn.title = 'Chọn từ danh sách';
+        document.getElementById(mode + 'GuideTypeCustom').focus();
+      }
+    }
+
+    function onTypeSelectChange(mode) {
+      // Nothing special needed currently
+    }
+
+    function getGuideTypeValue(mode) {
+      const combo = document.getElementById(mode + 'TypeCombo');
+      if (combo.classList.contains('custom-mode')) {
+        return document.getElementById(mode + 'GuideTypeCustom').value.trim();
+      }
+      return document.getElementById(mode + 'GuideType').value;
+    }
+
+    function populateTypeSelect(selectId, allTypes, currentValue) {
+      const sel = document.getElementById(selectId);
+      const defaultTypes = ['Hướng dẫn', 'Tool', 'Web'];
+      const allUnique = [...new Set([...defaultTypes, ...allTypes])];
+      sel.innerHTML = allUnique.map(t => `<option value="${escapeHtml(t)}" ${t === currentValue ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('');
+      // If current value is not in list, add it
+      if (currentValue && !allUnique.includes(currentValue)) {
+        sel.innerHTML += `<option value="${escapeHtml(currentValue)}" selected>${escapeHtml(currentValue)}</option>`;
+      }
+    }
+
     function switchTab(tab) {
       currentTab = tab; // Track current tab for state persistence
       document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
@@ -1714,6 +1811,65 @@
       }
     }
 
+    // ==================== DRAG & DROP ====================
+    let dragSrcEl = null;
+    let dragSrcType = null;
+
+    function handleDragStart(e) {
+      dragSrcEl = this;
+      dragSrcType = this.dataset.guideType;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', this.dataset.guideRow);
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      // Only allow within same type
+      if (this.dataset.guideType === dragSrcType) {
+        this.classList.add('drag-over');
+      }
+    }
+
+    function handleDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+      if (dragSrcEl === this) return;
+      if (this.dataset.guideType !== dragSrcType) return;
+
+      const type = this.dataset.guideType;
+      const grid = this.closest('.guides-grid');
+      const cards = Array.from(grid.querySelectorAll('.guide-card'));
+
+      const fromIdx = cards.indexOf(dragSrcEl);
+      const toIdx = cards.indexOf(this);
+
+      // Reorder in DOM
+      if (fromIdx < toIdx) {
+        grid.insertBefore(dragSrcEl, this.nextSibling);
+      } else {
+        grid.insertBefore(dragSrcEl, this);
+      }
+
+      // Save new order to localStorage
+      const newCards = Array.from(grid.querySelectorAll('.guide-card'));
+      const newOrder = newCards.map(c => parseInt(c.dataset.guideRow));
+      saveGuideOrder(type, newOrder);
+
+      showToast('✅ Đã lưu thứ tự', 'success');
+    }
+
+    function handleDragEnd(e) {
+      document.querySelectorAll('.guide-card').forEach(c => {
+        c.classList.remove('dragging', 'drag-over');
+      });
+    }
+
     function renderGuides(filteredData = null) {
       const data = filteredData || groupedGuides;
       const container = document.getElementById('guidesContainer');
@@ -1723,7 +1879,7 @@
         return;
       }
 
-      const typeOrder = ['Hướng dẫn', 'Tool', 'Web', 'Multilanguage F1GenZ'];
+      // Dynamic type icons: default known ones + 📄 fallback
       const typeIcons = {
         'Hướng dẫn': '📖',
         'Tool': '🔧',
@@ -1731,59 +1887,47 @@
         'Multilanguage F1GenZ': '🌍'
       };
 
+      // Collect all types from data (dynamic, not hardcoded)
+      const allTypes = Object.keys(data);
+      // Known types go first, then others alphabetically
+      const knownOrder = ['Hướng dẫn', 'Tool', 'Web', 'Multilanguage F1GenZ'];
+      const sortedTypes = [
+        ...knownOrder.filter(t => allTypes.includes(t)),
+        ...allTypes.filter(t => !knownOrder.includes(t)).sort()
+      ];
+
+      const isFiltered = !!filteredData;
+
       let html = '';
-      typeOrder.forEach(type => {
+      if (!isFiltered) {
+        html += '<div class="guide-order-hint">💡 Kéo thả để sắp xếp thứ tự (lưu riêng cho mỗi user)</div>';
+      }
+
+      sortedTypes.forEach(type => {
         if (!data[type] || data[type].length === 0) return;
         
-        html += `
-          <div class="guide-group">
-            <div class="guide-group-title">${typeIcons[type] || '📄'} ${type} (${data[type].length})</div>
-            <div class="guides-grid">
-        `;
-        
-        data[type].forEach(guide => {
-          html += `
-            <div class="guide-card">
-              <div class="guide-info">
-                ${guide.link ? `<a href="${guide.link}" target="_blank" class="guide-title-link" title="${escapeHtml(guide.template)}">${escapeHtml(guide.template)}</a>` : `<div class="guide-title" title="${escapeHtml(guide.template)}">${escapeHtml(guide.template)}</div>`}
-                <div class="guide-links">
-                  ${guide.link ? `<button class="guide-link copy" onclick="copyLink('${guide.link}', this)">📋 Copy</button>` : ''}
-                </div>
-              </div>
-              <div class="guide-actions">
-                <button class="guide-action-btn edit" onclick="openEditGuideModal(${guide.rowNumber})">⚙️</button>
-                <button class="guide-action-btn delete" onclick="deleteGuide(${guide.rowNumber})">🗑️</button>
-              </div>
-            </div>
-          `;
-        });
-        
-        html += '</div></div>';
-      });
+        // Apply per-user ordering (only when not filtered/searching)
+        const guides = isFiltered ? data[type] : applyGuideOrder(data[type], type);
+        const icon = typeIcons[type] || '📄';
 
-      // Handle any other types not in typeOrder
-      Object.keys(data).forEach(type => {
-        if (typeOrder.includes(type) || !data[type] || data[type].length === 0) return;
-        
         html += `
-          <div class="guide-group">
-            <div class="guide-group-title">📄 ${type} (${data[type].length})</div>
+          <div class="guide-group" data-guide-type="${escapeHtml(type)}">
+            <div class="guide-group-title">${icon} ${escapeHtml(type)} (${guides.length})</div>
             <div class="guides-grid">
         `;
         
-        data[type].forEach(guide => {
+        guides.forEach(guide => {
           html += `
-            <div class="guide-card">
-              <div class="guide-icon">${typeIcons[type] || '📄'}</div>
+            <div class="guide-card" draggable="true" data-guide-row="${guide.rowNumber}" data-guide-type="${escapeHtml(type)}">
               <div class="guide-info">
-                ${guide.link ? `<a href="${guide.link}" target="_blank" class="guide-title-link" title="${escapeHtml(guide.template)}">${escapeHtml(guide.template)}</a>` : `<div class="guide-title" title="${escapeHtml(guide.template)}">${escapeHtml(guide.template)}</div>`}
+                ${guide.link ? `<a href="${guide.link}" target="_blank" class="guide-title-link" title="${escapeHtml(guide.template)}" onclick="event.stopPropagation()">${escapeHtml(guide.template)}</a>` : `<div class="guide-title" title="${escapeHtml(guide.template)}">${escapeHtml(guide.template)}</div>`}
                 <div class="guide-links">
-                  ${guide.link ? `<button class="guide-link copy" onclick="copyLink('${guide.link}', this)">📋 Copy</button>` : ''}
+                  ${guide.link ? `<button class="guide-link copy" onclick="event.stopPropagation(); copyLink('${guide.link}', this)">📋 Copy</button>` : ''}
                 </div>
               </div>
               <div class="guide-actions">
-                <button class="guide-action-btn edit" onclick="openEditGuideModal(${guide.rowNumber})">⚙️</button>
-                <button class="guide-action-btn delete" onclick="deleteGuide(${guide.rowNumber})">🗑️</button>
+                <button class="guide-action-btn edit" onclick="event.stopPropagation(); openEditGuideModal(${guide.rowNumber})">⚙️</button>
+                <button class="guide-action-btn delete" onclick="event.stopPropagation(); deleteGuide(${guide.rowNumber})">🗑️</button>
               </div>
             </div>
           `;
@@ -1793,6 +1937,15 @@
       });
 
       container.innerHTML = html;
+
+      // Attach drag events
+      container.querySelectorAll('.guide-card').forEach(card => {
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragover', handleDragOver);
+        card.addEventListener('dragleave', handleDragLeave);
+        card.addEventListener('drop', handleDrop);
+        card.addEventListener('dragend', handleDragEnd);
+      });
     }
 
     function filterGuides() {
@@ -1817,20 +1970,30 @@
 
     // ==================== GUIDES CRUD ====================
     function openCreateGuideModal() {
-      document.getElementById('createGuideType').value = 'Hướng dẫn';
+      // Populate type select with all known types from current data
+      const existingTypes = Object.keys(groupedGuides);
+      populateTypeSelect('createGuideType', existingTypes, 'Hướng dẫn');
+      
+      // Reset custom mode
+      document.getElementById('createTypeCombo').classList.remove('custom-mode');
+      document.getElementById('createGuideTypeCustom').value = '';
+      document.getElementById('createTypeCombo').querySelector('.type-toggle-btn').textContent = '➕ Mới';
+      
       document.getElementById('createGuideTemplate').value = '';
       document.getElementById('createGuideLink').value = '';
       document.getElementById('createGuideModal').classList.add('active');
     }
 
     async function submitCreateGuide() {
+      const type = getGuideTypeValue('create');
       const guide = {
-        type: document.getElementById('createGuideType').value,
+        type: type,
         template: document.getElementById('createGuideTemplate').value.trim(),
         link: document.getElementById('createGuideLink').value.trim(),
         app: ''
       };
       
+      if (!guide.type) { showToast('Điền loại hướng dẫn', 'error'); return; }
       if (!guide.template) { showToast('Điền tên template', 'error'); return; }
       
       showToast('Đang tạo...');
@@ -1849,8 +2012,16 @@
       const guide = allGuides.find(g => g.rowNumber === rowNumber);
       if (!guide) { showToast('Không tìm thấy', 'error'); return; }
       
+      // Populate type select with all known types
+      const existingTypes = Object.keys(groupedGuides);
+      populateTypeSelect('editGuideType', existingTypes, guide.type || 'Hướng dẫn');
+      
+      // Reset custom mode
+      document.getElementById('editTypeCombo').classList.remove('custom-mode');
+      document.getElementById('editGuideTypeCustom').value = '';
+      document.getElementById('editTypeCombo').querySelector('.type-toggle-btn').textContent = '➕ Mới';
+      
       document.getElementById('editGuideRowNumber').value = rowNumber;
-      document.getElementById('editGuideType').value = guide.type || 'Hướng dẫn';
       document.getElementById('editGuideTemplate').value = guide.template || '';
       document.getElementById('editGuideLink').value = guide.link || '';
       document.getElementById('editGuideModal').classList.add('active');
@@ -1858,13 +2029,15 @@
 
     async function submitEditGuide() {
       const rowNumber = parseInt(document.getElementById('editGuideRowNumber').value);
+      const type = getGuideTypeValue('edit');
       const updates = {
-        type: document.getElementById('editGuideType').value,
+        type: type,
         template: document.getElementById('editGuideTemplate').value.trim(),
         link: document.getElementById('editGuideLink').value.trim(),
         app: ''
       };
       
+      if (!updates.type) { showToast('Điền loại hướng dẫn', 'error'); return; }
       if (!updates.template) { showToast('Điền tên template', 'error'); return; }
       
       showToast('Đang lưu...');

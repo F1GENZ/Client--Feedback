@@ -229,7 +229,9 @@
 
     /* Guides Table */
     .guides-container { flex: 1; overflow-y: auto; padding: 15px; }
-    .guide-group { margin-bottom: 20px; }
+    .guide-group { margin-bottom: 20px; cursor: grab; transition: all 0.2s; }
+    .guide-group.group-dragging { opacity: 0.4; border: 2px dashed var(--primary); border-radius: 8px; }
+    .guide-group.group-drag-over { border-top: 3px solid var(--success); }
     .guide-group-title { font-size: 13px; font-weight: 600; color: var(--dark); margin-bottom: 10px; padding: 6px 12px; background: var(--light); border-left: 3px solid var(--primary); border-radius: 0 4px 4px 0; display: inline-block; }
     .guides-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
     .guide-card { background: var(--white); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; transition: all 0.2s; display: flex; align-items: flex-start; gap: 10px; cursor: grab; user-select: none; }
@@ -592,7 +594,7 @@
               <option value="Web">Web</option>
             </select>
             <input type="text" id="createGuideTypeCustom" placeholder="Nhập loại mới...">
-            <button type="button" class="type-toggle-btn" onclick="toggleTypeMode('create')" title="Tạo loại mới">➕ Mới</button>
+            <button type="button" class="type-toggle-btn" onclick="toggleTypeMode('create')" title="Tạo loại mới">+ Mới</button>
           </div>
         </div>
         <div class="form-group">
@@ -629,7 +631,7 @@
               <option value="Web">Web</option>
             </select>
             <input type="text" id="editGuideTypeCustom" placeholder="Nhập loại mới...">
-            <button type="button" class="type-toggle-btn" onclick="toggleTypeMode('edit')" title="Tạo loại mới">➕ Mới</button>
+            <button type="button" class="type-toggle-btn" onclick="toggleTypeMode('edit')" title="Tạo loại mới">+ Mới</button>
           </div>
         </div>
         <div class="form-group">
@@ -1668,6 +1670,32 @@
       } catch (e) { return null; }
     }
 
+    function getGroupOrder() {
+      try {
+        const saved = localStorage.getItem(getGuideOrderKey() + '_groups');
+        if (!saved) return null;
+        return JSON.parse(saved);
+      } catch (e) { return null; }
+    }
+
+    function saveGroupOrder(typeNames) {
+      try {
+        localStorage.setItem(getGuideOrderKey() + '_groups', JSON.stringify(typeNames));
+      } catch (e) { console.error('Failed to save group order', e); }
+    }
+
+    function applyGroupOrder(types) {
+      const order = getGroupOrder();
+      if (!order || order.length === 0) return types;
+      const orderMap = {};
+      order.forEach((t, i) => orderMap[t] = i);
+      return [...types].sort((a, b) => {
+        const oa = orderMap[a] !== undefined ? orderMap[a] : 9999;
+        const ob = orderMap[b] !== undefined ? orderMap[b] : 9999;
+        return oa - ob;
+      });
+    }
+
     function saveGuideOrder(type, rowNumbers) {
       try {
         const key = getGuideOrderKey();
@@ -1699,7 +1727,7 @@
       const btn = combo.querySelector('.type-toggle-btn');
       if (isCustom) {
         combo.classList.remove('custom-mode');
-        btn.textContent = '➕ Mới';
+        btn.textContent = '+ Mới';
         btn.title = 'Tạo loại mới';
       } else {
         combo.classList.add('custom-mode');
@@ -1872,6 +1900,61 @@
       });
     }
 
+    // ==================== GROUP DRAG & DROP ====================
+    let groupDragSrc = null;
+
+    function handleGroupDragStart(e) {
+      // Only start group drag from the title area
+      groupDragSrc = this;
+      this.classList.add('group-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/group', this.dataset.guideType);
+    }
+
+    function handleGroupDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (this !== groupDragSrc && groupDragSrc) {
+        this.classList.add('group-drag-over');
+      }
+    }
+
+    function handleGroupDragLeave(e) {
+      this.classList.remove('group-drag-over');
+    }
+
+    function handleGroupDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.classList.remove('group-drag-over');
+      if (!groupDragSrc || groupDragSrc === this) return;
+
+      const container = this.parentElement;
+      const groups = Array.from(container.querySelectorAll('.guide-group'));
+      const fromIdx = groups.indexOf(groupDragSrc);
+      const toIdx = groups.indexOf(this);
+
+      if (fromIdx < toIdx) {
+        container.insertBefore(groupDragSrc, this.nextSibling);
+      } else {
+        container.insertBefore(groupDragSrc, this);
+      }
+
+      // Save group order
+      const newGroups = Array.from(container.querySelectorAll('.guide-group'));
+      const newOrder = newGroups.map(g => g.dataset.guideType);
+      saveGroupOrder(newOrder);
+
+      showToast('✅ Đã lưu thứ tự nhóm', 'success');
+    }
+
+    function handleGroupDragEnd(e) {
+      document.querySelectorAll('.guide-group').forEach(g => {
+        g.classList.remove('group-dragging', 'group-drag-over');
+      });
+      groupDragSrc = null;
+    }
+
     function renderGuides(filteredData = null) {
       const data = filteredData || groupedGuides;
       const container = document.getElementById('guidesContainer');
@@ -1893,17 +1976,19 @@
       const allTypes = Object.keys(data);
       // Known types go first, then others alphabetically
       const knownOrder = ['Hướng dẫn', 'Tool', 'Web', 'Multilanguage F1GenZ'];
-      const sortedTypes = [
+      let sortedTypes = [
         ...knownOrder.filter(t => allTypes.includes(t)),
         ...allTypes.filter(t => !knownOrder.includes(t)).sort()
       ];
 
       const isFiltered = !!filteredData;
 
-      let html = '';
+      // Apply per-user group ordering
       if (!isFiltered) {
-        html += '<div class="guide-order-hint">💡 Kéo thả để sắp xếp thứ tự (lưu riêng cho mỗi user)</div>';
+        sortedTypes = applyGroupOrder(sortedTypes);
       }
+
+      let html = '';
 
       sortedTypes.forEach(type => {
         if (!data[type] || data[type].length === 0) return;
@@ -1913,7 +1998,7 @@
         const icon = typeIcons[type] || '📄';
 
         html += `
-          <div class="guide-group" data-guide-type="${escapeHtml(type)}">
+          <div class="guide-group" draggable="true" data-guide-type="${escapeHtml(type)}">
             <div class="guide-group-title">${icon} ${escapeHtml(type)} (${guides.length})</div>
             <div class="guides-grid">
         `;
@@ -1940,13 +2025,22 @@
 
       container.innerHTML = html;
 
-      // Attach drag events
+      // Attach card drag events
       container.querySelectorAll('.guide-card').forEach(card => {
-        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragstart', function(e) { e.stopPropagation(); handleDragStart.call(this, e); });
         card.addEventListener('dragover', handleDragOver);
         card.addEventListener('dragleave', handleDragLeave);
         card.addEventListener('drop', handleDrop);
         card.addEventListener('dragend', handleDragEnd);
+      });
+
+      // Attach group drag events
+      container.querySelectorAll('.guide-group').forEach(group => {
+        group.addEventListener('dragstart', handleGroupDragStart);
+        group.addEventListener('dragover', handleGroupDragOver);
+        group.addEventListener('dragleave', handleGroupDragLeave);
+        group.addEventListener('drop', handleGroupDrop);
+        group.addEventListener('dragend', handleGroupDragEnd);
       });
     }
 
@@ -1979,7 +2073,7 @@
       // Reset custom mode
       document.getElementById('createTypeCombo').classList.remove('custom-mode');
       document.getElementById('createGuideTypeCustom').value = '';
-      document.getElementById('createTypeCombo').querySelector('.type-toggle-btn').textContent = '➕ Mới';
+      document.getElementById('createTypeCombo').querySelector('.type-toggle-btn').textContent = '+ Mới';
       
       document.getElementById('createGuideTemplate').value = '';
       document.getElementById('createGuideLink').value = '';
@@ -2021,7 +2115,7 @@
       // Reset custom mode
       document.getElementById('editTypeCombo').classList.remove('custom-mode');
       document.getElementById('editGuideTypeCustom').value = '';
-      document.getElementById('editTypeCombo').querySelector('.type-toggle-btn').textContent = '➕ Mới';
+      document.getElementById('editTypeCombo').querySelector('.type-toggle-btn').textContent = '+ Mới';
       
       document.getElementById('editGuideRowNumber').value = rowNumber;
       document.getElementById('editGuideTemplate').value = guide.template || '';

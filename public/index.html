@@ -332,6 +332,10 @@
                 <label>Tìm kiếm</label>
                 <input type="text" id="searchInput" placeholder="Shop, nội dung..." oninput="debounceFilter()">
               </div>
+              <div class="filter-group" style="flex: 1.5;">
+                <label>URL / Link</label>
+                <input type="text" id="urlFilterInput" placeholder="Link, domain..." oninput="debounceFilter()">
+              </div>
               <div class="filter-group">
                 <label>Trạng thái</label>
                 <select id="filterStage" onchange="applyFilter()"><option value="all">Tất cả</option></select>
@@ -657,8 +661,10 @@
     let originalFeedback = []; // Keep original data for filtering
     let currentPage = 1;
     const itemsPerPage = 30;
+    const AUTO_REFRESH_INTERVAL_MS = 5000;
     let cachedHosts = [];
     let selectedHost = 'all'; // Currently selected host tab
+    let isSilentRefreshing = false;
 
     // Host avatars mapping
     const hostAvatars = {
@@ -727,17 +733,20 @@
       addHeaderRefreshBtn();
 
 
-      // Auto Refresh Interval (15s)
+      // Auto refresh dashboard data every 5 seconds without resetting filters.
       setInterval(() => {
         // SAFEGUARD: Only refresh if NO modal is open
         if (!document.querySelector('.modal-overlay.active')) {
           refreshDataSilent();
         }
-      }, 15000);
+      }, AUTO_REFRESH_INTERVAL_MS);
     }
     startClock();
 
     async function refreshDataSilent() {
+      if (isSilentRefreshing) return;
+
+      isSilentRefreshing = true;
       const btn = document.getElementById('headerRefreshBtn') || document.querySelector('.refresh-btn');
       if (btn) btn.classList.add('spinning');
       
@@ -764,6 +773,7 @@
         console.error('Auto-refresh failed', e);
       } finally {
         if (btn) btn.classList.remove('spinning');
+        isSilentRefreshing = false;
       }
     }
 
@@ -919,6 +929,10 @@
             if (state.search) {
               const searchEl = document.getElementById('searchInput');
               if (searchEl) searchEl.value = state.search;
+            }
+            if (state.urlFilter) {
+              const urlFilterEl = document.getElementById('urlFilterInput');
+              if (urlFilterEl) urlFilterEl.value = state.urlFilter;
             }
             if (state.sort) {
               const sortEl = document.getElementById('sortOrder');
@@ -1126,6 +1140,7 @@
 
     function applyFilter(reload = false, preservePage = false) {
       const search = document.getElementById('searchInput').value.toLowerCase().trim();
+      const urlFilter = document.getElementById('urlFilterInput').value.toLowerCase().trim();
       const stage = document.getElementById('filterStage').value;
       const sort = document.getElementById('sortOrder').value;
 
@@ -1161,6 +1176,12 @@
             (r.note && r.note.toLowerCase().includes(search)) ||
             (r.host && r.host.toLowerCase().includes(search)) ||
             (r.tags && r.tags.toLowerCase().includes(search))
+          );
+        }
+        if (urlFilter) {
+          f = f.filter(r =>
+            (r.link && r.link.toLowerCase().includes(urlFilter)) ||
+            (r.shop && r.shop.toLowerCase().includes(urlFilter))
           );
         }
 
@@ -1200,6 +1221,7 @@
         host: selectedHost,
         stage: document.getElementById('filterStage')?.value || 'all',
         search: document.getElementById('searchInput')?.value || '',
+        urlFilter: document.getElementById('urlFilterInput')?.value || '',
         sort: document.getElementById('sortOrder')?.value || 'time_desc',
         page: currentPage
       };
@@ -1232,6 +1254,10 @@
         if (state.search) {
           const searchEl = document.getElementById('searchInput');
           if (searchEl) searchEl.value = state.search;
+        }
+        if (state.urlFilter) {
+          const urlFilterEl = document.getElementById('urlFilterInput');
+          if (urlFilterEl) urlFilterEl.value = state.urlFilter;
         }
         if (state.sort) {
           const sortEl = document.getElementById('sortOrder');
@@ -2165,6 +2191,7 @@
       applyFilter();
     });
     document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') applyFilter(); });
+    document.getElementById('urlFilterInput').addEventListener('keypress', e => { if (e.key === 'Enter') applyFilter(); });
     document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('active'); }));
     // Removed auto-refresh that was resetting filters
     // setInterval(loadDashboard, 5 * 60 * 1000);

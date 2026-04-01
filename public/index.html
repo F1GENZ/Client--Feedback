@@ -918,26 +918,23 @@
           renderStats(stats);
           renderFilterOptions(result.filterOptions);
           
-          // Apply restored state after rendering filter options
-          const savedState = localStorage.getItem('dashboardState');
-          if (savedState) {
-            const state = JSON.parse(savedState);
-            if (state.stage && state.stage !== 'all') {
-              const stageEl = document.getElementById('filterStage');
-              if (stageEl) stageEl.value = state.stage;
-            }
-            if (state.search) {
-              const searchEl = document.getElementById('searchInput');
-              if (searchEl) searchEl.value = state.search;
-            }
-            if (state.urlFilter) {
-              const urlFilterEl = document.getElementById('urlFilterInput');
-              if (urlFilterEl) urlFilterEl.value = state.urlFilter;
-            }
-            if (state.sort) {
-              const sortEl = document.getElementById('sortOrder');
-              if (sortEl) sortEl.value = state.sort;
-            }
+          // Apply restored state after rendering filter options.
+          const state = getSavedState();
+          if (state.stage && state.stage !== 'all') {
+            const stageEl = document.getElementById('filterStage');
+            if (stageEl) stageEl.value = state.stage;
+          }
+          if (state.search) {
+            const searchEl = document.getElementById('searchInput');
+            if (searchEl) searchEl.value = state.search;
+          }
+          if (state.urlFilter) {
+            const urlFilterEl = document.getElementById('urlFilterInput');
+            if (urlFilterEl) urlFilterEl.value = state.urlFilter;
+          }
+          if (state.sort) {
+            const sortEl = document.getElementById('sortOrder');
+            if (sortEl) sortEl.value = state.sort;
           }
           
           renderTable();
@@ -1215,6 +1212,58 @@
     // ==================== STATE PERSISTENCE ====================
     let currentTab = 'feedback';
 
+    function getSavedState() {
+      let state = {};
+
+      try {
+        const saved = localStorage.getItem('dashboardState');
+        if (saved) {
+          state = JSON.parse(saved) || {};
+        }
+      } catch (e) {
+        console.log('Failed to parse local state:', e);
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('tab')) state.tab = params.get('tab') || 'feedback';
+      if (params.has('host')) state.host = params.get('host') || 'all';
+      if (params.has('stage')) state.stage = params.get('stage') || 'all';
+      if (params.has('search')) state.search = params.get('search') || '';
+      if (params.has('urlFilter')) state.urlFilter = params.get('urlFilter') || '';
+      if (params.has('sort')) state.sort = params.get('sort') || 'time_desc';
+      if (params.has('page')) {
+        const parsedPage = parseInt(params.get('page'), 10);
+        if (!Number.isNaN(parsedPage) && parsedPage > 0) {
+          state.page = parsedPage;
+        }
+      }
+
+      return state;
+    }
+
+    function syncStateToUrl(state) {
+      const url = new URL(window.location.href);
+      const setOrDelete = (key, value, defaultValue) => {
+        const normalizedValue = value === undefined || value === null ? '' : String(value);
+        if (!normalizedValue || normalizedValue === String(defaultValue)) {
+          url.searchParams.delete(key);
+        } else {
+          url.searchParams.set(key, normalizedValue);
+        }
+      };
+
+      setOrDelete('tab', state.tab, 'feedback');
+      setOrDelete('host', state.host, 'all');
+      setOrDelete('stage', state.stage, 'all');
+      setOrDelete('search', state.search, '');
+      setOrDelete('urlFilter', state.urlFilter, '');
+      setOrDelete('sort', state.sort, 'time_desc');
+      setOrDelete('page', state.page, 1);
+
+      const nextUrl = `${url.pathname}${url.searchParams.toString() ? '?' + url.searchParams.toString() : ''}${url.hash}`;
+      window.history.replaceState({}, '', nextUrl);
+    }
+
     function saveState() {
       const state = {
         tab: currentTab,
@@ -1226,19 +1275,18 @@
         page: currentPage
       };
       localStorage.setItem('dashboardState', JSON.stringify(state));
+      syncStateToUrl(state);
     }
 
     function restoreState() {
       try {
-        const saved = localStorage.getItem('dashboardState');
-        if (!saved) return;
-        
-        const state = JSON.parse(saved);
+        const state = getSavedState();
+        if (Object.keys(state).length === 0) return;
         
         // Restore tab
         if (state.tab && state.tab !== 'feedback') {
           currentTab = state.tab;
-          switchTab(state.tab);
+          switchTab(state.tab, { skipStateSync: true });
         }
         
         // Restore host
@@ -1786,7 +1834,7 @@
       }
     }
 
-    function switchTab(tab) {
+    function switchTab(tab, options = {}) {
       currentTab = tab; // Track current tab for state persistence
       document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1803,7 +1851,7 @@
         document.getElementById('historyTab').classList.add('active');
         loadHistory();
       }
-      saveState();
+      if (!options.skipStateSync) saveState();
     }
 
     function refreshHistory() {

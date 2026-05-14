@@ -670,6 +670,9 @@
     let selectedHost = 'all'; // Currently selected host tab
     let isSilentRefreshing = false;
     let feedbackDragSrc = null;
+    let prioritySaveTimer = null;
+    let prioritySaveVersion = 0;
+    let isSavingPriority = false;
 
     // Host avatars mapping
     const hostAvatars = {
@@ -741,7 +744,7 @@
       // Auto refresh dashboard data every 5 seconds without resetting filters.
       setInterval(() => {
         // SAFEGUARD: Only refresh if NO modal is open
-        if (!document.querySelector('.modal-overlay.active')) {
+        if (!document.querySelector('.modal-overlay.active') && !feedbackDragSrc && !isSavingPriority && !prioritySaveTimer) {
           refreshDataSilent();
         }
       }, AUTO_REFRESH_INTERVAL_MS);
@@ -1114,7 +1117,52 @@
       this.classList.remove('drag-over');
     }
 
-    async function handleFeedbackDrop(e) {
+    function syncPriorityToOriginal() {
+      const orderedMap = new Map(allFeedback.map((row, index) => [row.rowNumber, index + 1]));
+      originalFeedback.forEach(row => {
+        if (orderedMap.has(row.rowNumber)) row.priority = orderedMap.get(row.rowNumber);
+      });
+    }
+
+    function schedulePrioritySave() {
+      clearTimeout(prioritySaveTimer);
+      const version = ++prioritySaveVersion;
+      prioritySaveTimer = setTimeout(() => {
+        prioritySaveTimer = null;
+        savePriorityOrder(version);
+      }, 450);
+    }
+
+    async function savePriorityOrder(version) {
+      if (isSavingPriority) {
+        schedulePrioritySave();
+        return;
+      }
+
+      isSavingPriority = true;
+      const orderedRowNumbers = allFeedback.map(r => r.rowNumber);
+      try {
+        const result = await apiPost('updateFeedbackPriority', { orderedRowNumbers });
+        if (version !== prioritySaveVersion) return;
+
+        if (result.success) {
+          orderedRowNumbers.forEach((rowNumber, index) => {
+            const row = originalFeedback.find(item => item.rowNumber === rowNumber);
+            if (row) row.priority = index + 1;
+          });
+          showToast('Đã lưu thứ tự ưu tiên', 'success');
+        } else {
+          showToast('Lỗi: ' + result.message, 'error');
+        }
+      } catch (err) {
+        if (version === prioritySaveVersion) showToast('Lỗi: ' + err.message, 'error');
+      } finally {
+        isSavingPriority = false;
+        if (version !== prioritySaveVersion) savePriorityOrder(prioritySaveVersion);
+      }
+    }
+
+    function handleFeedbackDrop(e) {
       e.preventDefault();
       this.classList.remove('drag-over');
       if (!feedbackDragSrc || feedbackDragSrc === this) return;
@@ -1128,24 +1176,10 @@
       const [moved] = allFeedback.splice(fromIndex, 1);
       allFeedback.splice(toIndex, 0, moved);
       document.getElementById('sortOrder').value = 'priority';
+      syncPriorityToOriginal();
       renderTable();
       saveState();
-
-      try {
-        const result = await apiPost('updateFeedbackPriority', {
-          orderedRowNumbers: allFeedback.map(r => r.rowNumber)
-        });
-        if (result.success) {
-          showToast('Đã lưu thứ tự ưu tiên', 'success');
-          applyFilter(true, true);
-        } else {
-          showToast('Lỗi: ' + result.message, 'error');
-          applyFilter(true, true);
-        }
-      } catch (err) {
-        showToast('Lỗi: ' + err.message, 'error');
-        applyFilter(true, true);
-      }
+      schedulePrioritySave();
     }
 
     function handleFeedbackDragEnd() {

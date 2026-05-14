@@ -105,6 +105,9 @@
     .feedback-table th, .feedback-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
     .feedback-table th { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; color: var(--gray); background: var(--light); position: sticky; top: 0; }
     .feedback-table tr:hover { background: var(--table-hover, #f9fafb); }
+    .feedback-table tr.feedback-row { cursor: grab; }
+    .feedback-table tr.feedback-row.dragging { opacity: 0.45; }
+    .feedback-table tr.feedback-row.drag-over { box-shadow: inset 0 2px 0 var(--success); }
     .feedback-table .shop-name { font-weight: 600; color: var(--link-color, var(--primary)); font-size: 11px; }
     .feedback-table .note-text { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--gray); font-size: 11px; }
 
@@ -343,6 +346,7 @@
               <div class="filter-group">
                 <label>Sắp xếp</label>
                 <select id="sortOrder" onchange="applyFilter()">
+                  <option value="priority">Uu tien keo tha</option>
                   <option value="time_desc">Thời gian mới nhất</option>
                   <option value="time_asc">Thời gian cũ nhất</option>
                 </select>
@@ -665,6 +669,7 @@
     let cachedHosts = [];
     let selectedHost = 'all'; // Currently selected host tab
     let isSilentRefreshing = false;
+    let feedbackDragSrc = null;
 
     // Host avatars mapping
     const hostAvatars = {
@@ -901,7 +906,7 @@
         const result = await apiGet('getDashboardData');
         if (result && result.success) {
           // Sort by time (newest first) and store original
-          originalFeedback = (result.feedback || []).sort((a, b) => parseDate(b.time) - parseDate(a.time));
+          originalFeedback = sortByPriority(result.feedback || []);
           allFeedback = [...originalFeedback];
 
           // Calculate stats client-side for accuracy
@@ -1069,6 +1074,87 @@
       }
     }
 
+    function getPriorityValue(row) {
+      const value = parseInt(row.priority, 10);
+      return Number.isNaN(value) ? 999999 : value;
+    }
+
+    function sortByPriority(rows) {
+      return rows.sort((a, b) => {
+        const pa = getPriorityValue(a);
+        const pb = getPriorityValue(b);
+        if (pa !== pb) return pa - pb;
+        return parseDate(b.time) - parseDate(a.time);
+      });
+    }
+
+    function attachFeedbackDragEvents() {
+      document.querySelectorAll('#feedbackTableBody tr.feedback-row').forEach(row => {
+        row.addEventListener('dragstart', handleFeedbackDragStart);
+        row.addEventListener('dragover', handleFeedbackDragOver);
+        row.addEventListener('dragleave', handleFeedbackDragLeave);
+        row.addEventListener('drop', handleFeedbackDrop);
+        row.addEventListener('dragend', handleFeedbackDragEnd);
+      });
+    }
+
+    function handleFeedbackDragStart(e) {
+      feedbackDragSrc = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', this.dataset.row);
+    }
+
+    function handleFeedbackDragOver(e) {
+      e.preventDefault();
+      if (this !== feedbackDragSrc) this.classList.add('drag-over');
+    }
+
+    function handleFeedbackDragLeave() {
+      this.classList.remove('drag-over');
+    }
+
+    async function handleFeedbackDrop(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+      if (!feedbackDragSrc || feedbackDragSrc === this) return;
+
+      const fromRow = parseInt(feedbackDragSrc.dataset.row, 10);
+      const toRow = parseInt(this.dataset.row, 10);
+      const fromIndex = allFeedback.findIndex(r => r.rowNumber === fromRow);
+      const toIndex = allFeedback.findIndex(r => r.rowNumber === toRow);
+      if (fromIndex < 0 || toIndex < 0) return;
+
+      const [moved] = allFeedback.splice(fromIndex, 1);
+      allFeedback.splice(toIndex, 0, moved);
+      document.getElementById('sortOrder').value = 'priority';
+      renderTable();
+      saveState();
+
+      try {
+        const result = await apiPost('updateFeedbackPriority', {
+          orderedRowNumbers: allFeedback.map(r => r.rowNumber)
+        });
+        if (result.success) {
+          showToast('Da luu thu tu uu tien', 'success');
+          applyFilter(true, true);
+        } else {
+          showToast('Loi: ' + result.message, 'error');
+          applyFilter(true, true);
+        }
+      } catch (err) {
+        showToast('Loi: ' + err.message, 'error');
+        applyFilter(true, true);
+      }
+    }
+
+    function handleFeedbackDragEnd() {
+      document.querySelectorAll('#feedbackTableBody tr.feedback-row').forEach(row => {
+        row.classList.remove('dragging', 'drag-over');
+      });
+      feedbackDragSrc = null;
+    }
+
     function renderTable() {
       const start = (currentPage - 1) * itemsPerPage;
       const rows = allFeedback.slice(start, start + itemsPerPage);
@@ -1080,8 +1166,8 @@
       }
       
       document.getElementById('feedbackTableBody').innerHTML = rows.map((r, i) => `
-        <tr>
-          <td><input type="checkbox" class="row-checkbox" data-row="${r.rowNumber}" ${selectedRows.has(r.rowNumber) ? 'checked' : ''} onclick="toggleSelectRow(${r.rowNumber})"></td>
+        <tr class="feedback-row" draggable="true" data-row="${r.rowNumber}">
+          <td><input type="checkbox" class="row-checkbox" data-row="${r.rowNumber}" ${selectedRows.has(r.rowNumber) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSelectRow(${r.rowNumber})"></td>
           <td>${start + i + 1}</td>
           <td class="shop-name">
             <a href="https://${r.shop}/admin" target="_blank" style="color:var(--primary);text-decoration:none;">${r.shop || '-'}</a>
@@ -1117,6 +1203,7 @@
         </tr>
       `).join('');
       
+      attachFeedbackDragEvents();
       renderPagination();
     }
 
@@ -1183,11 +1270,15 @@
         }
 
         // Sorting
-        f.sort((a, b) => {
-          if (sort === 'time_desc') return parseDate(b.time) - parseDate(a.time);
-          if (sort === 'time_asc') return parseDate(a.time) - parseDate(b.time);
-          return 0;
-        });
+        if (sort === 'priority') {
+          sortByPriority(f);
+        } else {
+          f.sort((a, b) => {
+            if (sort === 'time_desc') return parseDate(b.time) - parseDate(a.time);
+            if (sort === 'time_asc') return parseDate(a.time) - parseDate(b.time);
+            return 0;
+          });
+        }
 
         allFeedback = f;
 
@@ -1230,7 +1321,7 @@
       if (params.has('stage')) state.stage = params.get('stage') || 'all';
       if (params.has('search')) state.search = params.get('search') || '';
       if (params.has('urlFilter')) state.urlFilter = params.get('urlFilter') || '';
-      if (params.has('sort')) state.sort = params.get('sort') || 'time_desc';
+      if (params.has('sort')) state.sort = params.get('sort') || 'priority';
       if (params.has('page')) {
         const parsedPage = parseInt(params.get('page'), 10);
         if (!Number.isNaN(parsedPage) && parsedPage > 0) {
@@ -1257,7 +1348,7 @@
       setOrDelete('stage', state.stage, 'all');
       setOrDelete('search', state.search, '');
       setOrDelete('urlFilter', state.urlFilter, '');
-      setOrDelete('sort', state.sort, 'time_desc');
+      setOrDelete('sort', state.sort, 'priority');
       setOrDelete('page', state.page, 1);
 
       const nextUrl = `${url.pathname}${url.searchParams.toString() ? '?' + url.searchParams.toString() : ''}${url.hash}`;
@@ -1271,7 +1362,7 @@
         stage: document.getElementById('filterStage')?.value || 'all',
         search: document.getElementById('searchInput')?.value || '',
         urlFilter: document.getElementById('urlFilterInput')?.value || '',
-        sort: document.getElementById('sortOrder')?.value || 'time_desc',
+        sort: document.getElementById('sortOrder')?.value || 'priority',
         page: currentPage
       };
       localStorage.setItem('dashboardState', JSON.stringify(state));
@@ -1323,8 +1414,15 @@
 
     function parseDate(str) {
       if (!str) return 0;
-      const parts = str.split(' ')[1].split('/'); // HH:mm:ss dd/MM/yyyy
-      return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+      try {
+        const chunks = String(str).split(' ');
+        const datePart = chunks.find(part => part.includes('/'));
+        if (!datePart) return 0;
+        const parts = datePart.split('/');
+        return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+      } catch (e) {
+        return 0;
+      }
     }
 
 

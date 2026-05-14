@@ -346,7 +346,7 @@
               <div class="filter-group">
                 <label>Sắp xếp</label>
                 <select id="sortOrder" onchange="applyFilter()">
-                  <option value="priority">Uu tien keo tha</option>
+                  <option value="priority">Ưu tiên kéo thả</option>
                   <option value="time_desc">Thời gian mới nhất</option>
                   <option value="time_asc">Thời gian cũ nhất</option>
                 </select>
@@ -1136,14 +1136,14 @@
           orderedRowNumbers: allFeedback.map(r => r.rowNumber)
         });
         if (result.success) {
-          showToast('Da luu thu tu uu tien', 'success');
+          showToast('Đã lưu thứ tự ưu tiên', 'success');
           applyFilter(true, true);
         } else {
-          showToast('Loi: ' + result.message, 'error');
+          showToast('Lỗi: ' + result.message, 'error');
           applyFilter(true, true);
         }
       } catch (err) {
-        showToast('Loi: ' + err.message, 'error');
+        showToast('Lỗi: ' + err.message, 'error');
         applyFilter(true, true);
       }
     }

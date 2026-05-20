@@ -1709,7 +1709,11 @@
         const result = await apiGet('telegram-image', { fileId: fileId });
         
         if (result.success && result.url) {
-          container.innerHTML = '<img id="feedbackImage" src="' + result.url + '" style="max-width:200px; border-radius:8px; cursor:pointer;">';
+          container.innerHTML =
+            '<div style="position:relative; display:inline-block;">' +
+              '<img id="feedbackImage" src="' + result.url + '" style="max-width:200px; border-radius:8px; cursor:pointer;">' +
+              '<button onclick="event.stopPropagation(); deleteFeedbackImage()" style="position:absolute; top:5px; right:5px; background:var(--danger); color:white; border:none; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:14px; line-height:1;" title="Xóa ảnh">×</button>' +
+            '</div>';
           
           const img = document.getElementById('feedbackImage');
           if (img) {
@@ -1720,6 +1724,34 @@
         }
       } catch (e) {
         container.innerHTML = '<div style="color:var(--danger); padding:10px;">Loi: ' + e.message + '</div>';
+      }
+    }
+
+    async function deleteFeedbackImage() {
+      if (!currentCommentRow) return;
+      if (!confirm('Xóa ảnh Telegram gốc này?')) return;
+
+      showToast('Đang xóa ảnh...');
+      try {
+        const result = await apiPost('deleteFeedbackImage', { rowNumber: currentCommentRow });
+        if (result.success) {
+          currentImageNote = '';
+          [allFeedback, originalFeedback].forEach(list => {
+            const item = list.find(row => row.rowNumber === currentCommentRow);
+            if (item) {
+              item.imageNote = '';
+              item.imageId = '';
+            }
+          });
+          const container = document.getElementById('telegramImageContainer');
+          if (container) container.remove();
+          renderTable();
+          showToast('Đã xóa ảnh!', 'success');
+        } else {
+          showToast('Lỗi: ' + result.message, 'error');
+        }
+      } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
       }
     }
     

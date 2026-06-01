@@ -561,10 +561,7 @@
               <div style="text-align:center; color:var(--gray); padding:30px;">Đang tải...</div>
             </div>
             <div style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
-              <div id="commentImagePreview" style="display:none; margin-bottom:10px; position:relative;">
-                <img id="commentPreviewImg" style="max-width:200px; border-radius:8px; border:1px solid var(--border);">
-                <button onclick="removeCommentImage()" style="position:absolute; top:5px; right:5px; background:var(--danger); color:white; border:none; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:14px; line-height:1;">×</button>
-              </div>
+              <div id="commentImagePreview" style="display:none; margin-bottom:10px; gap:8px; flex-wrap:wrap;"></div>
               <div style="display: flex; gap: 10px; align-items: flex-start;">
                 <textarea id="newCommentText" placeholder="Viết bình luận (Ctrl+V để paste ảnh)..." style="flex:1; min-height:40px; resize:vertical; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
                 <button class="btn btn-primary" style="padding: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 8px; flex-shrink: 0;" onclick="addNewComment()" title="Gửi">
@@ -1554,10 +1551,10 @@
       
       // Load Comments
       currentCommentRow = rowNumber;
-      currentCommentImage = null; // Reset image
+      currentCommentImages = []; // Reset images
       document.getElementById('commentsList').innerHTML = '<div style="text-align:center; color:var(--gray); padding:30px;">Đang tải...</div>';
       document.getElementById('newCommentText').value = '';
-      document.getElementById('commentImagePreview').style.display = 'none';
+      renderCommentImagePreview();
       
       // Add paste event listener for images
       const textarea = document.getElementById('newCommentText');
@@ -1631,6 +1628,30 @@
       }
     }
 
+    function parseCommentImages(commentText) {
+      const images = [];
+      let text = commentText || '';
+      text = text.replace(/\[IMAGE\]\s*(https?:\/\/\S+)/g, function(_, url) {
+        images.push(url.trim());
+        return '';
+      });
+
+      text = text.replace(/https?:\/\/\S+/g, function(url) {
+        const lower = url.toLowerCase();
+        const looksLikeImage =
+          lower.includes('images.f1genz.dev/') ||
+          lower.includes('api.telegram.org/file/') ||
+          /\.(png|jpe?g|gif|webp)(\?|#|$)/i.test(lower);
+        if (looksLikeImage) {
+          images.push(url.trim());
+          return '';
+        }
+        return url;
+      });
+
+      return { text: text.trim(), images: [...new Set(images)] };
+    }
+
     function renderComments(comments) {
       let html = '';
       
@@ -1648,17 +1669,11 @@
         html += '<div style="text-align:center; color:var(--gray); padding:30px;">Chưa có comment nào</div>';
       } else {
         html += comments.map(function(c, idx) {
-          let commentText = c.text || '';
-          let imageData = null;
-          
-          // Check if comment contains image (base64 or URL)
-          if (commentText.includes('[IMAGE]')) {
-            const parts = commentText.split('[IMAGE]');
-            commentText = parts[0];
-            imageData = parts[1];
-          }
-          
-          const imgId = 'commentImg' + idx;
+          const parsed = parseCommentImages(c.text || '');
+          const imagesHtml = parsed.images.map(function(imageUrl, imgIdx) {
+            const imgId = 'commentImg' + idx + '_' + imgIdx;
+            return '<img id="' + imgId + '" src="' + escapeHtml(imageUrl) + '" style="max-width:200px; border-radius:8px; cursor:pointer; margin:0 8px 8px 0;">';
+          }).join('');
           
           return '<div class="comment-item" style="padding:10px 0; border-bottom:1px solid var(--border);">' +
             '<div style="display:flex; justify-content:space-between; font-size:11px; color:var(--gray); margin-bottom: 10px;">' +
@@ -1668,8 +1683,8 @@
                 '<button onclick="deleteComment(' + idx + ')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:14px; padding:0; line-height:1;" title="Xoa">×</button>' +
               '</div>' +
             '</div>' +
-            (imageData ? '<div style="margin-bottom:8px;"><img id="' + imgId + '" src="' + escapeHtml(imageData) + '" style="max-width:200px; border-radius:8px; cursor:pointer;"></div>' : '') +
-            '<div style="font-size:13px; white-space: pre-wrap; word-break: break-word;">' + escapeHtml(commentText) + '</div>' +
+            (imagesHtml ? '<div style="margin-bottom:8px;">' + imagesHtml + '</div>' : '') +
+            '<div style="font-size:13px; white-space: pre-wrap; word-break: break-word;">' + escapeHtml(parsed.text) + '</div>' +
           '</div>';
         }).join('');
       }
@@ -1679,13 +1694,13 @@
       // Add click handlers for images
       if (comments.length > 0) {
         comments.forEach(function(c, idx) {
-          if (c.text && c.text.includes('[IMAGE]')) {
-            const imgEl = document.getElementById('commentImg' + idx);
+          const parsed = parseCommentImages(c.text || '');
+          parsed.images.forEach(function(imageUrl, imgIdx) {
+            const imgEl = document.getElementById('commentImg' + idx + '_' + imgIdx);
             if (imgEl) {
-              const imageUrl = c.text.split('[IMAGE]')[1];
               imgEl.onclick = function() { openImageLightbox(imageUrl); };
             }
-          }
+          });
         });
       }
       
@@ -1774,29 +1789,53 @@
     }
 
     // Image paste handling
-    let currentCommentImage = null;
+    let currentCommentImages = [];
+
+    function renderCommentImagePreview() {
+      const preview = document.getElementById('commentImagePreview');
+      if (!preview) return;
+
+      if (currentCommentImages.length === 0) {
+        preview.style.display = 'none';
+        preview.innerHTML = '';
+        return;
+      }
+
+      preview.style.display = 'flex';
+      preview.innerHTML = currentCommentImages.map(function(imageData, index) {
+        return '<div style="position:relative; display:inline-block;">' +
+          '<img src="' + imageData + '" style="max-width:120px; max-height:120px; border-radius:8px; border:1px solid var(--border); object-fit:cover;">' +
+          '<button onclick="removeCommentImage(' + index + ')" style="position:absolute; top:5px; right:5px; background:var(--danger); color:white; border:none; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:14px; line-height:1;">×</button>' +
+        '</div>';
+      }).join('');
+    }
 
     function handleCommentPaste(e) {
       const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      let foundImage = false;
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.indexOf('image') !== -1) {
           e.preventDefault();
+          foundImage = true;
           const blob = items[i].getAsFile();
           const reader = new FileReader();
           reader.onload = function(event) {
-            currentCommentImage = event.target.result;
-            document.getElementById('commentPreviewImg').src = currentCommentImage;
-            document.getElementById('commentImagePreview').style.display = 'block';
+            currentCommentImages.push(event.target.result);
+            renderCommentImagePreview();
           };
           reader.readAsDataURL(blob);
-          break;
         }
       }
+      if (foundImage) showToast('Đã thêm ảnh vào preview', 'success');
     }
 
-    function removeCommentImage() {
-      currentCommentImage = null;
-      document.getElementById('commentImagePreview').style.display = 'none';
+    function removeCommentImage(index) {
+      if (index === undefined || index === null) {
+        currentCommentImages = [];
+      } else {
+        currentCommentImages.splice(index, 1);
+      }
+      renderCommentImagePreview();
     }
 
     async function addNewComment() {
@@ -1805,24 +1844,28 @@
       const text = document.getElementById('newCommentText').value.trim();
       let commentContent = text;
       
-      // Upload image to R2 if pasted
-      if (currentCommentImage) {
-        showToast('Đang upload ảnh...');
+      // Upload images to R2 if pasted
+      if (currentCommentImages.length > 0) {
+        showToast('Đang upload ' + currentCommentImages.length + ' ảnh...');
         try {
-          const uploadResult = await apiPost('upload-image', { imageData: currentCommentImage });
-          if (uploadResult.success) {
-            commentContent = text + '\n[IMAGE]' + uploadResult.url;
-          } else {
-            showToast('Lỗi upload ảnh: ' + uploadResult.message, 'error');
-            return;
+          const imageUrls = [];
+          for (const imageData of currentCommentImages) {
+            const uploadResult = await apiPost('upload-image', { imageData });
+            if (uploadResult.success) {
+              imageUrls.push(uploadResult.url);
+            } else {
+              showToast('Lỗi upload ảnh: ' + uploadResult.message, 'error');
+              return;
+            }
           }
+          commentContent = text + imageUrls.map(url => '\n[IMAGE]' + url).join('');
         } catch (e) {
           showToast('Lỗi upload ảnh: ' + e.message, 'error');
           return;
         }
       }
       
-      if (!commentContent || commentContent === '\n[IMAGE]') { 
+      if (!commentContent && currentCommentImages.length === 0) { 
         showToast('Nhập nội dung comment', 'error'); 
         return; 
       }

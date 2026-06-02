@@ -1628,9 +1628,18 @@
       }
     }
 
+    function getTelegramImageProxyUrl(fileId) {
+      return '/api/telegram-image?' + new URLSearchParams({ fileId: fileId, raw: '1' }).toString();
+    }
+
     function parseCommentImages(commentText) {
       const images = [];
       let text = commentText || '';
+      text = text.replace(/\[TG_IMAGE\]\s*(\S+)/g, function(_, fileId) {
+        images.push(getTelegramImageProxyUrl(fileId.trim()));
+        return '';
+      });
+
       text = text.replace(/\[IMAGE\]\s*(https?:\/\/\S+)/g, function(_, url) {
         images.push(url.trim());
         return '';

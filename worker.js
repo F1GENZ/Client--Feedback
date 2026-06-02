@@ -71,6 +71,7 @@ async function handleImageUpload(request, env) {
 async function handleApiRequest(request, url) {
   const action = url.pathname.replace('/api/', '');
   const params = url.searchParams;
+  const isRawTelegramImage = action === 'telegram-image' && params.get('raw') === '1';
 
   try {
     let response;
@@ -107,9 +108,19 @@ async function handleApiRequest(request, url) {
       response = await fetch(apiUrl, {
         redirect: 'follow',
         headers: {
-          'Accept': 'application/json',
+          'Accept': isRawTelegramImage ? 'image/*' : 'application/json',
           'x-api-key': 'd0042f16f1e0ba3a5d9e4d60bf46bdfbad50d8aa'
         }
+      });
+    }
+
+    if (isRawTelegramImage) {
+      const headers = new Headers(response.headers);
+      headers.set('Access-Control-Allow-Origin', '*');
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers
       });
     }
 

@@ -4,14 +4,14 @@ main = "worker.js"
 compatibility_date = "2026-01-08"
 workers_dev = true
 
-# Static Assets (HTML/CSS/JS)
-[assets]
-directory = "./public"
-
 # Optional: uncomment to use custom domain
 routes = [
   { pattern = "feedback.f1genz.dev", custom_domain = true }
 ]
+
+# Static Assets (HTML/CSS/JS)
+[assets]
+directory = "./public"
 
 [[r2_buckets]]
 binding = "IMAGES"

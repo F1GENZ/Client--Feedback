@@ -113,7 +113,20 @@
     .feedback-table tr.feedback-row.dragging { opacity: 0.45; }
     .feedback-table tr.feedback-row.drag-over { box-shadow: inset 0 2px 0 var(--success); }
     .feedback-table .shop-name { font-weight: 600; color: var(--link-color, var(--primary)); font-size: 11px; }
-    .feedback-table .note-text { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--gray); font-size: 11px; }
+    .feedback-table .note-text { max-width: 320px; color: var(--gray); font-size: 11px; }
+    .feedback-content-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .feedback-content-actions { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .feedback-content-body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .feedback-content-icons { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; line-height: 1; }
+    .feedback-content-icon { display: inline-block; animation: feedback-icon-pingpong 0.95s ease-in-out infinite alternate; transform-origin: center; will-change: transform; }
+    .feedback-content-icon:nth-child(2) { animation-delay: 0.18s; }
+    @keyframes feedback-icon-pingpong {
+      from { transform: translateX(-1px) rotate(-7deg) scale(0.96); }
+      to { transform: translateX(2px) rotate(7deg) scale(1.08); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .feedback-content-icon { animation: none; }
+    }
     .copy-cell { cursor: copy; }
     .copy-cell:hover { text-decoration: underline; }
 
@@ -295,6 +308,9 @@
       .feedback-table td { padding: 4px 0; border: none; display: flex; justify-content: space-between; }
       .feedback-table td::before { content: attr(data-label); font-weight: 600; color: var(--gray); font-size: 11px; }
       .feedback-table td:first-child { display: none; }
+      .feedback-table td.note-text { display: block; max-width: none; }
+      .feedback-table td.note-text::before { display: block; margin-bottom: 4px; }
+      .feedback-content-row { width: 100%; }
       .main-tabs { overflow-x: auto; }
       .main-tab { white-space: nowrap; padding: 8px 12px; font-size: 12px; }
       .guides-grid { grid-template-columns: 1fr; }
@@ -1216,11 +1232,15 @@
           </td>
           <td><strong>${r.host || '-'}</strong></td>
           <td class="note-text" title="${escapeHtml(r.note || r.message || '')}">
-            <div style="display:flex; align-items:center; gap:4px;">
-              <span class="copy-cell" data-copy="${escapeHtml(r.note || r.message || '')}" title="Click để copy nội dung" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r.note || r.message || '-'}</span>
-              <span style="flex-shrink:0; font-size:14px;">
-                ${r.devNote ? '📝' : ''}${(r.imageNote || r.imageId) ? '📷' : ''}
+            <div class="feedback-content-row">
+              <span class="feedback-content-actions">
+                <button class="action-btn view" onclick="event.stopPropagation(); viewDetail(${r.rowNumber})">Xem</button>
+                ${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="event.stopPropagation(); window.open(\'' + r.link + '\', \'_blank\')">Link</button>' : ''}
               </span>
+              <span class="feedback-content-icons">
+                ${r.devNote ? '<span class="feedback-content-icon" title="Có note">📝</span>' : ''}${(r.imageNote || r.imageId) ? '<span class="feedback-content-icon" title="Có ảnh">📷</span>' : ''}
+              </span>
+              <span class="copy-cell feedback-content-body" data-copy="${escapeHtml(r.note || r.message || '')}" title="Click để copy nội dung">${r.note || r.message || '-'}</span>
             </div>
           </td>
           <td>
@@ -1237,9 +1257,7 @@
           <td style="font-size:10px; white-space:nowrap;">${formatVNTime(r.time)}</td>
           <td style="font-size:10px;">${formatVNTime(r.deadline)}</td>
           <td style="white-space:nowrap;">
-            <button class="action-btn view" onclick="viewDetail(${r.rowNumber})">Xem</button>
             <button class="action-btn" style="background:#fee2e2;color:#dc2626;" onclick="deleteFeedback(${r.rowNumber})">Xóa</button>
-            ${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="window.open(\'' + r.link + '\', \'_blank\')">Link</button>' : ''}
           </td>
         </tr>
       `).join('');

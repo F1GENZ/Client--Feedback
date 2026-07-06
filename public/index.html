@@ -118,14 +118,11 @@
     .feedback-content-actions { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
     .feedback-content-body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .feedback-content-icons { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; line-height: 1; }
-    .feedback-content-icon { display: inline-block; animation: feedback-icon-pingpong 0.95s ease-in-out infinite alternate; transform-origin: center; will-change: transform; }
-    .feedback-content-icon:nth-child(2) { animation-delay: 0.18s; }
+    .feedback-content-icon { display: inline-block; animation: feedback-icon-pingpong 0.75s ease-in-out infinite alternate; transform-origin: center; will-change: transform, filter; }
+    .feedback-content-icon:nth-child(2) { animation-delay: 0.2s; }
     @keyframes feedback-icon-pingpong {
-      from { transform: translateX(-1px) rotate(-7deg) scale(0.96); }
-      to { transform: translateX(2px) rotate(7deg) scale(1.08); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .feedback-content-icon { animation: none; }
+      from { transform: translateX(-4px) translateY(1px) rotate(-13deg) scale(0.92); filter: drop-shadow(0 0 0 rgba(79,70,229,0)); }
+      to { transform: translateX(4px) translateY(-2px) rotate(13deg) scale(1.22); filter: drop-shadow(0 0 5px rgba(79,70,229,0.45)); }
     }
     .copy-cell { cursor: copy; }
     .copy-cell:hover { text-decoration: underline; }

@@ -399,7 +399,8 @@
                     <th>Host</th>
                     <th>Nội dung</th>
                     <th>Stage</th>
-                    <th>Thời gian</th>
+                    <th>Thời gian tạo</th>
+                    <th>Thời gian Done</th>
                     <th>Deadline</th>
                     <th></th>
                   </tr>
@@ -1216,7 +1217,7 @@
       const rows = allFeedback.slice(start, start + itemsPerPage);
       
       if (rows.length === 0) {
-        document.getElementById('feedbackTableBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;">Không có dữ liệu</td></tr>';
+        document.getElementById('feedbackTableBody').innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;">Không có dữ liệu</td></tr>';
         document.getElementById('pagination').innerHTML = '';
         return;
       }
@@ -1254,6 +1255,7 @@
             </div>
           </td>
           <td style="font-size:10px; white-space:nowrap;">${formatVNTime(r.time)}</td>
+          <td style="font-size:10px; white-space:nowrap;">${formatVNTime(r.doneAt)}</td>
           <td style="font-size:10px;">${formatVNTime(r.deadline)}</td>
           <td style="white-space:nowrap;">
             <button class="action-btn" style="background:#fee2e2;color:#dc2626;" onclick="deleteFeedback(${r.rowNumber})">Xóa</button>

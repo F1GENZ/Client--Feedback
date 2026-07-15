@@ -397,7 +397,7 @@
                     <th>#</th>
                     <th>Shop</th>
                     <th>Host</th>
-                    <th>Người tạo Feedback</th>
+                    <th style="width:80px; white-space:nowrap;">Người tạo</th>
                     <th>Nội dung</th>
                     <th>Stage</th>
                     <th>Thời gian tạo</th>
@@ -1232,7 +1232,7 @@
             <div class="tag-list">${renderTags(r.tags)}</div>
           </td>
           <td><strong>${r.host || '-'}</strong></td>
-          <td><strong>${r.creatorName || 'Tuấn'}</strong></td>
+          <td style="width:80px; white-space:nowrap;"><strong>${r.creatorName || ''}</strong></td>
           <td class="note-text" title="${escapeHtml(r.note || r.message || '')}">
             <div class="feedback-content-row">
               <span class="feedback-content-actions">

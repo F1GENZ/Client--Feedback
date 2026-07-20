@@ -807,7 +807,7 @@
 
     async function apiGet(action, params = {}) {
       const response = await fetch('/api/' + action + '?' + new URLSearchParams(params));
-      return response.json();
+      return safeJsonResponse(response);
     }
 
     async function apiPost(action, data = {}) {
@@ -816,7 +816,18 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
-      return response.json();
+      return safeJsonResponse(response);
+    }
+
+    async function safeJsonResponse(response) {
+      let body;
+      try { body = await response.json(); } catch (_) {
+        throw new Error('May chu dang bao tri (phan hoi khong hop le). Vui long thu lai sau.');
+      }
+      if (!response.ok && !body.success) {
+        throw new Error(body.message || `Loi may chu (${response.status}). Vui long thu lai sau.`);
+      }
+      return body;
     }
 
     // ==================== BULK ACTIONS ====================

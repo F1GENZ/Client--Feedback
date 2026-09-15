@@ -3,6 +3,7 @@
 // Backend: Express.js API Server
 
 const API_URL = 'https://api-feedback.f1genz.dev/api/exec';
+const ALLOWED_ORIGIN = 'https://feedback.f1genz.dev';
 
 export default {
   async fetch(request, env) {
@@ -14,7 +15,7 @@ export default {
     }
 
     if (url.pathname.startsWith('/api/')) {
-      return handleApiRequest(request, url);
+      return handleApiRequest(request, url, env);
     }
 
     // Serve static assets (HTML/CSS/JS from /public directory)
@@ -68,10 +69,16 @@ async function handleImageUpload(request, env) {
   }
 }
 
-async function handleApiRequest(request, url) {
+async function handleApiRequest(request, url, env) {
   const action = url.pathname.replace('/api/', '');
   const params = url.searchParams;
   const isRawTelegramImage = action === 'telegram-image' && params.get('raw') === '1';
+
+  if (!env.API_KEY) {
+    return new Response(JSON.stringify({ success: false, message: 'API_KEY secret not configured on worker' }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 
   try {
     let response;
@@ -81,7 +88,7 @@ async function handleApiRequest(request, url) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': 'd0042f16f1e0ba3a5d9e4d60bf46bdfbad50d8aa'
+          'x-api-key': env.API_KEY
         },
         body: JSON.stringify({ action, ...JSON.parse(body) }),
         redirect: 'follow'
@@ -106,14 +113,14 @@ async function handleApiRequest(request, url) {
         redirect: 'follow',
         headers: {
           'Accept': isRawTelegramImage ? 'image/*' : 'application/json',
-          'x-api-key': 'd0042f16f1e0ba3a5d9e4d60bf46bdfbad50d8aa'
+          'x-api-key': env.API_KEY
         }
       });
     }
 
     if (isRawTelegramImage) {
       const headers = new Headers(response.headers);
-      headers.set('Access-Control-Allow-Origin', '*');
+      headers.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
@@ -129,7 +136,7 @@ async function handleApiRequest(request, url) {
         message: `Upstream error ${response.status}: ${prefix}`
       }), {
         status: 502,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': ALLOWED_ORIGIN }
       });
     }
 
@@ -142,12 +149,12 @@ async function handleApiRequest(request, url) {
         message: 'Upstream response is not valid JSON'
       }), {
         status: 502,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': ALLOWED_ORIGIN }
       });
     }
 
     return new Response(text, {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': ALLOWED_ORIGIN }
     });
   } catch (error) {
     return new Response(JSON.stringify({ success: false, message: error.message }), {

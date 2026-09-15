@@ -13,6 +13,9 @@ routes = [
 [assets]
 directory = "./public"
 
+# Secret (set via: echo "<KEY>" | wrangler secret put API_KEY)
+# Must match server .env API_KEY. Do NOT hardcode keys in worker.js.
+
 [[r2_buckets]]
 binding = "IMAGES"
 bucket_name = "f1genz-images"

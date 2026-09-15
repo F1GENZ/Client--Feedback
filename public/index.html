@@ -1252,8 +1252,8 @@
             <div class="feedback-content-row">
               <span class="feedback-content-actions">
                 <button class="action-btn view" onclick="event.stopPropagation(); viewDetail(${r.rowNumber})">Xem</button>
-                ${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="event.stopPropagation(); window.open(\'' + r.link + '\', \'_blank\')">Link</button>' : ''}
                 <button class="action-btn share" onclick="event.stopPropagation(); shareFeedback(${r.rowNumber})">Chia sẻ</button>
+                ${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="event.stopPropagation(); window.open(\'' + r.link + '\', \'_blank\')">Link</button>' : ''}
               </span>
               <span class="feedback-content-icons">
                 ${r.devNote ? '<span class="feedback-content-icon" title="Có note">📝</span>' : ''}${(r.imageNote || r.imageId) ? '<span class="feedback-content-icon" title="Có ảnh">📷</span>' : ''}

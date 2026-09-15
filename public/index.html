@@ -157,6 +157,8 @@
     .action-btn.delete:hover { background: #dc2626; }
     .action-btn.link { background: #6b7280; color: var(--white); }
     .action-btn.link:hover { background: #4b5563; }
+    .action-btn.share { background: #10b981; color: var(--white); }
+    .action-btn.share:hover { background: #059669; }
     
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; opacity: 0; transition: opacity 0.3s; }
@@ -594,6 +596,8 @@
         </div>
       </div>
       <div class="modal-footer">
+        <button class="btn btn-outline" onclick="copyAIPrompt(currentCommentRow)">🤖 Copy cho AI</button>
+        <button class="btn btn-outline" onclick="shareFeedback(currentCommentRow)">🔗 Chia sẻ</button>
         <button class="btn btn-outline" onclick="closeModal('editModal')">Đóng</button>
         <div style="display:flex; gap:8px;">
           <button id="btnEnableEdit" class="btn btn-primary" onclick="enableEditMode()" style="background: #f59e0b;">✏️ Sửa</button>
@@ -1249,6 +1253,7 @@
               <span class="feedback-content-actions">
                 <button class="action-btn view" onclick="event.stopPropagation(); viewDetail(${r.rowNumber})">Xem</button>
                 ${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="event.stopPropagation(); window.open(\'' + r.link + '\', \'_blank\')">Link</button>' : ''}
+                <button class="action-btn share" onclick="event.stopPropagation(); shareFeedback(${r.rowNumber})">Chia sẻ</button>
               </span>
               <span class="feedback-content-icons">
                 ${r.devNote ? '<span class="feedback-content-icon" title="Có note">📝</span>' : ''}${(r.imageNote || r.imageId) ? '<span class="feedback-content-icon" title="Có ảnh">📷</span>' : ''}
@@ -1558,7 +1563,7 @@
     }
 
     function openEditModal(rowNumber) {
-      const item = allFeedback.find(r => r.rowNumber === rowNumber);
+      const item = allFeedback.find(r => r.rowNumber === rowNumber) || originalFeedback.find(r => r.rowNumber === rowNumber);
       if (!item) { showToast('Không tìm thấy', 'error'); return; }
       
       document.getElementById('editRowNumber').value = rowNumber;
@@ -1587,6 +1592,7 @@
       
       // Load Comments
       currentCommentRow = rowNumber;
+      currentLoadedComments = [];
       currentCommentImages = []; // Reset images
       document.getElementById('commentsList').innerHTML = '<div style="text-align:center; color:var(--gray); padding:30px;">Đang tải...</div>';
       document.getElementById('newCommentText').value = '';
@@ -1697,7 +1703,9 @@
       return { text: text.trim(), images: [...new Set(images)] };
     }
 
+    let currentLoadedComments = [];
     function renderComments(comments) {
+      currentLoadedComments = comments || [];
       let html = '';
       
       // Show Image_note first if exists (Telegram file_id)
@@ -1963,6 +1971,12 @@
         var btnSave = document.getElementById('btnSaveEdit');
         if (btnEdit) btnEdit.classList.remove('hidden');
         if (btnSave) btnSave.classList.add('hidden');
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('feedback')) {
+          url.searchParams.delete('feedback');
+          const nextUrl = url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '') + url.hash;
+          window.history.replaceState({}, '', nextUrl);
+        }
       }
     }
     
@@ -1984,6 +1998,52 @@
         showToast('Lỗi copy: ' + err.message, 'error');
       });
     }
+
+    function shareFeedback(rowNumber) {
+      const url = location.origin + location.pathname + '?feedback=' + rowNumber;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          showToast('✅ Đã copy link chia sẻ', 'success');
+        }).catch(err => {
+          showToast('Lỗi copy: ' + err.message, 'error');
+        });
+      } else {
+        window.prompt('Copy link chia sẻ:', url);
+      }
+    }
+    function copyAIPrompt(rowNumber) {
+      const item = allFeedback.find(r => r.rowNumber === rowNumber) || originalFeedback.find(r => r.rowNumber === rowNumber);
+      if (!item) { showToast('Không tìm thấy feedback', 'error'); return; }
+
+      let md = '# [Feedback #' + rowNumber + '] Shop: ' + (item.shop || 'N/A') + '\n';
+      md += '- **URL / Link:** ' + (item.link || 'N/A') + '\n';
+      md += '- **Host:** ' + (item.host || 'N/A') + ' | **Người tạo:** ' + (item.creatorName || 'N/A') + '\n';
+      md += '- **Trạng thái:** ' + (item.stage || 'N/A') + ' | **Deadline:** ' + (item.deadline || 'N/A') + '\n';
+      if (item.tags) md += '- **Tags:** ' + item.tags + '\n';
+      md += '\n## Nội dung Feedback:\n' + (item.note || item.message || 'Không có mô tả') + '\n';
+
+      if (Array.isArray(currentLoadedComments) && currentLoadedComments.length > 0) {
+        md += '\n## Lịch sử trao đổi / Comments (' + currentLoadedComments.length + '):\n';
+        currentLoadedComments.forEach((c, idx) => {
+          const author = c.author ? '[' + c.author + '] ' : '';
+          const time = c.time ? ' (' + c.time + ')' : '';
+          md += (idx + 1) + '. ' + author + time + ': ' + (c.text || c.content || '') + '\n';
+        });
+      }
+
+      md += '\n## Yêu cầu xử lý cho AI:\nHãy phân tích feedback trên và đề xuất giải pháp kỹ thuật / code fix cụ thể.\n';
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(md).then(() => {
+          showToast('✅ Đã copy Prompt cho AI!', 'success');
+        }).catch(err => {
+          showToast('Lỗi copy: ' + err.message, 'error');
+        });
+      } else {
+        window.prompt('Copy Prompt cho AI:', md);
+      }
+    }
+
 
     document.getElementById('feedbackTableBody').addEventListener('click', function(e) {
       const target = e.target.closest('.copy-cell');
@@ -2512,6 +2572,14 @@
 
     loadDashboard().then(() => {
       applyFilter();
+      const sharedParams = new URLSearchParams(window.location.search);
+      const sharedRow = Number(sharedParams.get('feedback'));
+      if (sharedRow) openEditModal(sharedRow);
+      if (sharedParams.has('feedback') && !document.getElementById('editModal').classList.contains('active')) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('feedback');
+        window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '') + url.hash);
+      }
     });
     document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') applyFilter(); });
     document.getElementById('urlFilterInput').addEventListener('keypress', e => { if (e.key === 'Enter') applyFilter(); });

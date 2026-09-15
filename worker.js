@@ -13,6 +13,19 @@ export default {
     if (url.pathname === '/api/upload-image' && request.method === 'POST') {
       return handleImageUpload(request, env);
     }
+    // Check client IP for dev-only features (e.g. Copy for AI)
+    if (url.pathname === '/api/my-ip') {
+      const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '';
+      const allowedIps = (env.ALLOWED_DEV_IPS || '118.68.211.157').split(',').map(s => s.trim());
+      const isAllowed = allowedIps.includes(clientIp);
+      return new Response(JSON.stringify({ success: true, ip: clientIp, isAllowed }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': ALLOWED_ORIGIN
+        }
+      });
+    }
+
 
     if (url.pathname.startsWith('/api/')) {
       return handleApiRequest(request, url, env);

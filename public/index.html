@@ -596,7 +596,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline" onclick="copyAIPrompt(currentCommentRow)">🤖 Copy cho AI</button>
+        <button id="btnCopyAIPrompt" class="btn btn-outline hidden" onclick="copyAIPrompt(currentCommentRow)" style="background: #eef2ff; color: #4f46e5; border-color: #c7d2fe;">🤖 Copy cho AI</button>
         <button class="btn btn-outline" onclick="shareFeedback(currentCommentRow)">🔗 Chia sẻ</button>
         <button class="btn btn-outline" onclick="closeModal('editModal')">Đóng</button>
         <div style="display:flex; gap:8px;">
@@ -2011,31 +2011,93 @@
         window.prompt('Copy link chia sẻ:', url);
       }
     }
-    function copyAIPrompt(rowNumber) {
+    async function copyAIPrompt(rowNumber) {
       const item = allFeedback.find(r => r.rowNumber === rowNumber) || originalFeedback.find(r => r.rowNumber === rowNumber);
       if (!item) { showToast('Không tìm thấy feedback', 'error'); return; }
 
-      let md = '# [Feedback #' + rowNumber + '] Shop: ' + (item.shop || 'N/A') + '\n';
-      md += '- **URL / Link:** ' + (item.link || 'N/A') + '\n';
-      md += '- **Host:** ' + (item.host || 'N/A') + ' | **Người tạo:** ' + (item.creatorName || 'N/A') + '\n';
-      md += '- **Trạng thái:** ' + (item.stage || 'N/A') + ' | **Deadline:** ' + (item.deadline || 'N/A') + '\n';
-      if (item.tags) md += '- **Tags:** ' + item.tags + '\n';
-      md += '\n## Nội dung Feedback:\n' + (item.note || item.message || 'Không có mô tả') + '\n';
+      // Ensure comments are loaded
+      let comments = currentLoadedComments;
+      if (!Array.isArray(comments) || comments.length === 0 || currentCommentRow !== rowNumber) {
+        try {
+          const res = await apiPost('getComments', { rowNumber });
+          if (res && res.success && Array.isArray(res.comments)) {
+            comments = res.comments;
+            currentLoadedComments = comments;
+            currentCommentRow = rowNumber;
+          }
+        } catch (_) {}
+      }
+      if (!Array.isArray(comments)) comments = [];
 
-      if (Array.isArray(currentLoadedComments) && currentLoadedComments.length > 0) {
-        md += '\n## Lịch sử trao đổi / Comments (' + currentLoadedComments.length + '):\n';
-        currentLoadedComments.forEach((c, idx) => {
-          const author = c.author ? '[' + c.author + '] ' : '';
-          const time = c.time ? ' (' + c.time + ')' : '';
-          md += (idx + 1) + '. ' + author + time + ': ' + (c.text || c.content || '') + '\n';
+      // Collect all images (feedback image + comment images)
+      const images = [];
+      const rawImage = (item.imageNote || item.imageId || '').trim();
+      if (rawImage) {
+        if (/^https?:\/\//i.test(rawImage)) {
+          images.push({ label: 'Ảnh feedback gốc', url: rawImage });
+        } else {
+          images.push({ label: 'Ảnh feedback gốc (Telegram)', url: location.origin + '/api/telegram-image?fileId=' + encodeURIComponent(rawImage) + '&raw=1' });
+        }
+      }
+
+      const parsedComments = [];
+      comments.forEach((c, idx) => {
+        const parsed = parseCommentImages(c.text || '');
+        if (parsed.images && parsed.images.length > 0) {
+          parsed.images.forEach((imgUrl, imgIdx) => {
+            const fullUrl = imgUrl.startsWith('/') ? (location.origin + imgUrl) : imgUrl;
+            images.push({
+              label: 'Ảnh trong comment ' + (idx + 1) + (imgIdx > 0 ? ' (' + (imgIdx + 1) + ')' : ''),
+              url: fullUrl
+            });
+          });
+        }
+        if (parsed.text) {
+          parsedComments.push({
+            author: c.author || '',
+            time: c.time || '',
+            text: parsed.text
+          });
+        }
+      });
+
+      const shareUrl = location.origin + location.pathname + '?feedback=' + rowNumber;
+      const storefrontUrl = item.link ? item.link : (item.shop ? ('https://' + item.shop) : '');
+
+      let md = '# [Issue #' + rowNumber + '] ' + (item.shop || 'Storefront') + '\n';
+      md += '- **Link Feedback (Dashboard):** ' + shareUrl + '\n';
+      if (storefrontUrl) {
+        md += '- **Link Website / Storefront:** ' + storefrontUrl + '\n';
+      }
+      if (item.tags) {
+        md += '- **Nền tảng / Tags:** ' + item.tags + '\n';
+      }
+
+      md += '\n## 📌 Nội dung mô tả lỗi:\n';
+      md += (item.note || item.message || 'Không có mô tả chi tiết') + '\n';
+
+      if (images.length > 0) {
+        md += '\n## 🖼️ Hình ảnh & Bằng chứng lỗi (Screenshots):\n';
+        images.forEach((img, i) => {
+          md += (i + 1) + '. ' + img.label + ':\n   ' + img.url + '\n';
         });
       }
 
-      md += '\n## Yêu cầu xử lý cho AI:\nHãy phân tích feedback trên và đề xuất giải pháp kỹ thuật / code fix cụ thể.\n';
+      if (parsedComments.length > 0) {
+        md += '\n## 💬 Lịch sử trao đổi / Chi tiết trong Comments:\n';
+        parsedComments.forEach((c, i) => {
+          const author = c.author ? '[' + c.author + '] ' : '';
+          const time = c.time ? '(' + c.time + ') ' : '';
+          md += (i + 1) + '. ' + author + time + '\n   ' + c.text + '\n';
+        });
+      }
+
+      md += '\n## 🎯 Yêu cầu xử lý cho AI Model:\n';
+      md += 'Hãy phân tích nguyên nhân kỹ thuật của lỗi trên và đề xuất giải pháp / mã code sửa lỗi cụ thể (CSS / Liquid / JS / HTML) phù hợp với giao diện và các hình ảnh đính kèm.\n';
 
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(md).then(() => {
-          showToast('✅ Đã copy Prompt cho AI!', 'success');
+          showToast('✅ Đã copy Prompt chi tiết cho AI!', 'success');
         }).catch(err => {
           showToast('Lỗi copy: ' + err.message, 'error');
         });
@@ -2044,6 +2106,35 @@
       }
     }
 
+
+    async function checkDevPermissions() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('dev') === '1') {
+        localStorage.setItem('f1genz_dev_mode', '1');
+      }
+      if (localStorage.getItem('f1genz_dev_mode') === '1') {
+        const btn = document.getElementById('btnCopyAIPrompt');
+        if (btn) btn.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const res = await apiGet('my-ip');
+        if (res && res.isAllowed) {
+          const btn = document.getElementById('btnCopyAIPrompt');
+          if (btn) btn.classList.remove('hidden');
+          return;
+        }
+      } catch (_) {}
+
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json').then(r => r.json());
+        if (ipRes && ipRes.ip && ['118.68.211.157'].includes(ipRes.ip)) {
+          const btn = document.getElementById('btnCopyAIPrompt');
+          if (btn) btn.classList.remove('hidden');
+        }
+      } catch (_) {}
+    }
 
     document.getElementById('feedbackTableBody').addEventListener('click', function(e) {
       const target = e.target.closest('.copy-cell');
@@ -2581,6 +2672,7 @@
         window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '') + url.hash);
       }
     });
+    checkDevPermissions();
     document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') applyFilter(); });
     document.getElementById('urlFilterInput').addEventListener('keypress', e => { if (e.key === 'Enter') applyFilter(); });
     document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('active'); }));

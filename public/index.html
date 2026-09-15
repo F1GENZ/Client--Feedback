@@ -2015,6 +2015,81 @@
         window.prompt('Copy link chia sẻ:', url);
       }
     }
+
+    function parseDocumentLinks(texts) {
+      const allText = Array.isArray(texts) ? texts.join('\n') : (texts || '');
+      const docs = [];
+      const seen = new Set();
+
+      // 1. Google Docs
+      const docRegex = /https?:\/\/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)[^\s"'>]*/gi;
+      let match;
+      while ((match = docRegex.exec(allText)) !== null) {
+        const id = match[1];
+        if (!seen.has(id)) {
+          seen.add(id);
+          docs.push({
+            type: 'Google Docs',
+            title: 'Tài liệu Google Docs',
+            viewUrl: 'https://docs.google.com/document/d/' + id + '/edit',
+            aiUrl: 'https://docs.google.com/document/d/' + id + '/export?format=txt',
+            format: 'Plain Text'
+          });
+        }
+      }
+
+      // 2. Google Sheets
+      const sheetRegex = /https?:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)[^\s"'>]*/gi;
+      while ((match = sheetRegex.exec(allText)) !== null) {
+        const id = match[1];
+        if (!seen.has(id)) {
+          seen.add(id);
+          docs.push({
+            type: 'Google Sheets',
+            title: 'Bảng tính Google Sheets',
+            viewUrl: 'https://docs.google.com/spreadsheets/d/' + id + '/edit',
+            aiUrl: 'https://docs.google.com/spreadsheets/d/' + id + '/export?format=csv',
+            format: 'CSV'
+          });
+        }
+      }
+
+      // 3. Google Drive file
+      const driveRegex = /https?:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)[^\s"'>]*/gi;
+      while ((match = driveRegex.exec(allText)) !== null) {
+        const id = match[1];
+        if (!seen.has(id)) {
+          seen.add(id);
+          docs.push({
+            type: 'Google Drive File',
+            title: 'File trên Google Drive',
+            viewUrl: 'https://drive.google.com/file/d/' + id + '/view',
+            aiUrl: 'https://drive.google.com/uc?export=download&id=' + id,
+            format: 'Direct Download'
+          });
+        }
+      }
+
+      // 4. Direct docx/xlsx/pdf links
+      const fileRegex = /https?:\/\/[^\s"'>]+\.(docx|doc|xlsx|xls|pdf)(\?[^\s"'>]*)?/gi;
+      while ((match = fileRegex.exec(allText)) !== null) {
+        const url = match[0];
+        const ext = match[1].toUpperCase();
+        if (!seen.has(url)) {
+          seen.add(url);
+          docs.push({
+            type: 'Tệp đính kèm',
+            title: 'File .' + ext,
+            viewUrl: url,
+            aiUrl: url,
+            format: ext
+          });
+        }
+      }
+
+      return docs;
+    }
+
     async function copyAIPrompt(rowNumber) {
       const item = allFeedback.find(r => r.rowNumber === rowNumber) || originalFeedback.find(r => r.rowNumber === rowNumber);
       if (!item) { showToast('Không tìm thấy feedback', 'error'); return; }
@@ -2066,7 +2141,15 @@
       });
 
       const shareUrl = location.origin + location.pathname + '?feedback=' + rowNumber;
-      const storefrontUrl = item.link ? item.link : (item.shop ? ('https://' + item.shop) : '');
+
+      // Detect documents (Docs/Sheets/Drive/Docx) across link, note, and comments
+      const allTextSources = [item.link || '', item.note || '', item.message || ''];
+      comments.forEach(c => { if (c && c.text) allTextSources.push(c.text); });
+      const attachedDocs = parseDocumentLinks(allTextSources);
+
+      // If item.link is a document, don't mislabel it as Storefront URL
+      const isLinkADoc = attachedDocs.some(d => item.link && item.link.includes(d.id || d.viewUrl));
+      const storefrontUrl = (!isLinkADoc && item.link) ? item.link : (item.shop ? ('https://' + item.shop) : '');
 
       let md = '# [Issue #' + rowNumber + '] ' + (item.shop || 'Storefront') + '\n';
       md += '- **Link Feedback (Dashboard):** ' + shareUrl + '\n';
@@ -2095,10 +2178,20 @@
           md += (i + 1) + '. ' + author + time + '\n   ' + c.text + '\n';
         });
       }
+      if (attachedDocs.length > 0) {
+        md += '\n## 📄 Tài liệu mô tả đính kèm (Docs / Sheets / Files):\n';
+        attachedDocs.forEach((doc, i) => {
+          md += (i + 1) + '. [' + doc.type + '] ' + doc.title + ':\n';
+          md += '   - Link xem: ' + doc.viewUrl + '\n';
+          md += '   - ⚡ Link đọc trực tiếp cho AI (' + doc.format + '): ' + doc.aiUrl + '\n';
+        });
+      }
 
       md += '\n## 🎯 Yêu cầu xử lý cho AI Model:\n';
       md += 'Hãy phân tích nguyên nhân kỹ thuật của lỗi trên và đề xuất giải pháp / mã code sửa lỗi cụ thể (CSS / Liquid / JS / HTML) phù hợp với giao diện và các hình ảnh đính kèm.\n';
-
+      if (attachedDocs.length > 0) {
+        md += 'Lưu ý: Nếu cần thông tin chi tiết hơn trong file Docs/Sheets đính kèm, hãy fetch link trực tiếp dạng Plain Text/CSV ở trên.\n';
+      }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(md).then(() => {
           showToast('✅ Đã copy Prompt chi tiết cho AI!', 'success');

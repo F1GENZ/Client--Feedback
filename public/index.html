@@ -159,6 +159,9 @@
     .action-btn.link:hover { background: #4b5563; }
     .action-btn.share { background: #10b981; color: var(--white); }
     .action-btn.share:hover { background: #059669; }
+    .action-btn.ai { background: #e0e7ff; color: #4338ca; font-weight: 600; }
+    .action-btn.ai:hover { background: #c7d2fe; color: #3730a3; }
+    body:not(.dev-mode) .dev-only { display: none !important; }
     
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; opacity: 0; transition: opacity 0.3s; }
@@ -596,7 +599,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button id="btnCopyAIPrompt" class="btn btn-outline hidden" onclick="copyAIPrompt(currentCommentRow)" style="background: #eef2ff; color: #4f46e5; border-color: #c7d2fe;">🤖 Copy cho AI</button>
+        <button id="btnCopyAIPrompt" class="btn btn-outline dev-only" onclick="copyAIPrompt(currentCommentRow)" style="background: #eef2ff; color: #4f46e5; border-color: #c7d2fe;">🤖 Copy cho AI</button>
         <button class="btn btn-outline" onclick="shareFeedback(currentCommentRow)">🔗 Chia sẻ</button>
         <button class="btn btn-outline" onclick="closeModal('editModal')">Đóng</button>
         <div style="display:flex; gap:8px;">
@@ -1253,6 +1256,7 @@
               <span class="feedback-content-actions">
                 <button class="action-btn view" onclick="event.stopPropagation(); viewDetail(${r.rowNumber})">Xem</button>
                 <button class="action-btn share" onclick="event.stopPropagation(); shareFeedback(${r.rowNumber})">Chia sẻ</button>
+                <button class="action-btn ai dev-only" onclick="event.stopPropagation(); copyAIPrompt(${r.rowNumber})" title="Copy Prompt cho AI">AI</button>
                 ${r.link ? '<button class="action-btn" style="background:#fef3c7;color:#d97706;" onclick="event.stopPropagation(); window.open(\'' + r.link + '\', \'_blank\')">Link</button>' : ''}
               </span>
               <span class="feedback-content-icons">
@@ -2113,16 +2117,14 @@
         localStorage.setItem('f1genz_dev_mode', '1');
       }
       if (localStorage.getItem('f1genz_dev_mode') === '1') {
-        const btn = document.getElementById('btnCopyAIPrompt');
-        if (btn) btn.classList.remove('hidden');
+        document.body.classList.add('dev-mode');
         return;
       }
 
       try {
         const res = await apiGet('my-ip');
         if (res && res.isAllowed) {
-          const btn = document.getElementById('btnCopyAIPrompt');
-          if (btn) btn.classList.remove('hidden');
+          document.body.classList.add('dev-mode');
           return;
         }
       } catch (_) {}
@@ -2130,8 +2132,7 @@
       try {
         const ipRes = await fetch('https://api.ipify.org?format=json').then(r => r.json());
         if (ipRes && ipRes.ip && ['118.68.211.157'].includes(ipRes.ip)) {
-          const btn = document.getElementById('btnCopyAIPrompt');
-          if (btn) btn.classList.remove('hidden');
+          document.body.classList.add('dev-mode');
         }
       } catch (_) {}
     }

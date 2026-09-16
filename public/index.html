@@ -2204,10 +2204,31 @@
     }
 
 
+    function toggleDevMode() {
+      const isDev = localStorage.getItem('f1genz_dev_mode') === '1';
+      if (isDev) {
+        localStorage.removeItem('f1genz_dev_mode');
+        document.body.classList.remove('dev-mode');
+        showToast('Đã tắt chế độ Dev', 'info');
+      } else {
+        localStorage.setItem('f1genz_dev_mode', '1');
+        document.body.classList.add('dev-mode');
+        showToast('✅ Đã bật chế độ Dev (Hiện nút AI)', 'success');
+      }
+    }
+
     async function checkDevPermissions() {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('dev') === '1') {
+      if (params.get('dev') === '1' || params.get('dev') === 'true') {
         localStorage.setItem('f1genz_dev_mode', '1');
+        document.body.classList.add('dev-mode');
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('dev');
+          window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '') + url.hash);
+        } catch (_) {}
+        showToast('✅ Đã kích hoạt chế độ Dev (Nút AI)!', 'success');
+        return;
       }
       if (localStorage.getItem('f1genz_dev_mode') === '1') {
         document.body.classList.add('dev-mode');
@@ -2217,6 +2238,7 @@
       try {
         const res = await apiGet('my-ip');
         if (res && res.isAllowed) {
+          localStorage.setItem('f1genz_dev_mode', '1');
           document.body.classList.add('dev-mode');
           return;
         }
@@ -2224,7 +2246,9 @@
 
       try {
         const ipRes = await fetch('https://api.ipify.org?format=json').then(r => r.json());
-        if (ipRes && ipRes.ip && ['118.68.211.157'].includes(ipRes.ip)) {
+        const devIps = ['118.68.211.157', '42.112.134.179'];
+        if (ipRes && ipRes.ip && devIps.includes(ipRes.ip)) {
+          localStorage.setItem('f1genz_dev_mode', '1');
           document.body.classList.add('dev-mode');
         }
       } catch (_) {}
@@ -2770,6 +2794,20 @@
     document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') applyFilter(); });
     document.getElementById('urlFilterInput').addEventListener('keypress', e => { if (e.key === 'Enter') applyFilter(); });
     document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('active'); }));
+
+    // Shortcut & double-click toggle for Dev Mode (Nút AI)
+    window.addEventListener('keydown', e => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        e.preventDefault();
+        toggleDevMode();
+      }
+    });
+    const sidebarHeader = document.querySelector('.sidebar-header');
+    if (sidebarHeader) {
+      sidebarHeader.style.cursor = 'pointer';
+      sidebarHeader.title = 'Double click để bật/tắt chế độ Dev (Nút AI) | Phím tắt: Ctrl + Shift + D';
+      sidebarHeader.addEventListener('dblclick', toggleDevMode);
+    }
     // Removed auto-refresh that was resetting filters
     // setInterval(loadDashboard, 5 * 60 * 1000);
   </script>

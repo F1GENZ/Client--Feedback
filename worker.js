@@ -16,7 +16,7 @@ export default {
     // Check client IP for dev-only features (e.g. Copy for AI)
     if (url.pathname === '/api/my-ip') {
       const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '';
-      const allowedIps = (env.ALLOWED_DEV_IPS || '118.68.211.157').split(',').map(s => s.trim());
+      const allowedIps = (env.ALLOWED_DEV_IPS || '118.68.211.157,42.112.134.179').split(',').map(s => s.trim());
       const isAllowed = allowedIps.includes(clientIp);
       return new Response(JSON.stringify({ success: true, ip: clientIp, isAllowed }), {
         headers: {

@@ -2217,10 +2217,10 @@
       }
       if (feedbackSheets.length > 0) {
         md += (ruleNo++) + '. Sheet feedback đính kèm: ' + feedbackSheets.map(d => d.originalUrl).join(' , ') + '\n';
+        md += '   - Khi ghi Sheet BẮT BUỘC gọi skill `google-sheet-feedback-row-marking` (đọc `skill://google-sheet-feedback-row-marking` trước khi ghi) và làm đúng quy trình trong skill: format Dev note, cách ghi ô (`anti.sheet.write_cell` / `anti.agent.sequence`), xác minh lại trên server.\n';
         md += '   - Tìm đúng dòng bằng cách đối chiếu nội dung cột Mô tả với mô tả lỗi ở trên (số Issue #' + rowNumber + ' là số của dashboard, KHÔNG phải số dòng trong sheet). Dùng đúng tab theo #gid= trong link.\n';
-        md += '   - Làm xong BẮT BUỘC ghi Dev note (nêu rõ thay đổi cụ thể, kiểu "Em đã fix ạ: ...") và đánh Stage = **Fixed**. TUYỆT ĐỐI không ghi "Done" (Done chỉ khách ghi sau nghiệm thu); không đụng dòng khách đã đánh Done; không ghi đè ô đã có nội dung.\n';
-        md += '   - Sau khi ghi, đọc lại dòng từ server (anti.sheet.extract) để xác nhận Stage + Dev note đã lưu đúng dòng.\n';
-        md += (ruleNo++) + '. Không đánh Fixed nếu chưa có bằng chứng live cả 2 vòng, hoặc kết quả còn phụ thuộc thao tác của khách/merchant, hoặc fix chưa sync lên theme; trường hợp đó để trống và báo rõ lý do.\n';
+        md += '   - Dev note + Stage theo skill: note ngắn 2-4 dòng ("Em đã fix ạ:", mỗi ý một dòng `- `), Stage = **Fixed**; việc còn chờ khách/Admin hoặc chưa sync theme thì ghi trong note, vẫn Fixed. TUYỆT ĐỐI không ghi "Done" (Done chỉ khách ghi sau nghiệm thu); không đụng dòng khách đã đánh Done; ghi ô luôn kèm `expectedPrevious` = giá trị đang có.\n';
+        md += '   - Sau khi ghi, xác minh trên server bằng CSV export (`/export?format=csv&gid=<gid>`), so khớp chính xác toàn chuỗi Dev note và Stage đúng dòng.\n';
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(md).then(() => {

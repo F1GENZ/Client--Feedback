@@ -2048,6 +2048,7 @@
             type: 'Google Sheets',
             title: 'Bảng tính Google Sheets',
             viewUrl: 'https://docs.google.com/spreadsheets/d/' + id + '/edit',
+            originalUrl: match[0],
             aiUrl: 'https://docs.google.com/spreadsheets/d/' + id + '/export?format=csv',
             format: 'CSV'
           });
@@ -2150,6 +2151,15 @@
       // If item.link is a document, don't mislabel it as Storefront URL
       const isLinkADoc = attachedDocs.some(d => item.link && item.link.includes(d.id || d.viewUrl));
       const storefrontUrl = (!isLinkADoc && item.link) ? item.link : (item.shop ? ('https://' + item.shop) : '');
+      const themeIds = [...new Set([...allTextSources.join('\n').matchAll(/[?&]themeid=(\d+)/gi)].map(m => m[1]))];
+      const themeScope = themeIds.length === 0
+        ? 'theme đang gắn với thư mục theme qua CLI (`theme_id` trong `.haravan-cli_local.json`)'
+        : (themeIds.length === 1 ? 'theme `' + themeIds[0] + '` (?themeid=' + themeIds[0] + ')' : 'theme `theme_id` trong `.haravan-cli_local.json`, với điều kiện nó nằm trong ' + themeIds.join(', '));
+      const themeGuard = 'đọc `theme_id` trong `.haravan-cli_local.json` ở thư mục gốc theme (đọc file, hoặc `hrv theme info` nếu user duyệt) = `<bound_id>`. ' +
+        (themeIds.length === 0
+          ? 'Feedback không có ?themeid nên dùng đúng `<bound_id>` này, không hỏi lại user; ghi rõ `<bound_id>` trong báo cáo. Nếu file không có `theme_id` thì DỪNG và báo user.'
+          : 'PHẢI ' + (themeIds.length === 1 ? 'bằng `' + themeIds[0] + '`' : 'nằm trong ' + themeIds.join(', ')) + '; nếu khác thì DỪNG và báo user (thư mục đang gắn theme khác với feedback).') +
+        ' File `.haravan-cli_local.json` là state cục bộ (gitignored): CHỈ đọc, không sửa tay, không commit. Lý do: `hrv theme fetch` luôn ghi theme_id của lệnh vào cấu hình project, nên không được fetch với id khác `<bound_id>`.';
 
       let md = '# [Issue #' + rowNumber + '] ' + (item.shop || 'Storefront') + '\n';
       md += '- **Link Feedback (Dashboard):** ' + shareUrl + '\n';
@@ -2191,6 +2201,26 @@
       md += 'Hãy phân tích nguyên nhân kỹ thuật của lỗi trên và đề xuất giải pháp / mã code sửa lỗi cụ thể (CSS / Liquid / JS / HTML) phù hợp với giao diện và các hình ảnh đính kèm.\n';
       if (attachedDocs.length > 0) {
         md += 'Lưu ý: Nếu cần thông tin chi tiết hơn trong file Docs/Sheets đính kèm, hãy fetch link trực tiếp dạng Plain Text/CSV ở trên.\n';
+      }
+      const feedbackSheets = attachedDocs.filter(d => d.type === 'Google Sheets');
+      const isHaravan = themeIds.length > 0 || /haravan/i.test((item.tags || '') + ' ' + storefrontUrl + ' ' + (item.shop || ''));
+      let ruleNo = 1;
+      md += '\n## ⛔ Quy tắc bắt buộc khi hoàn tất:\n';
+      md += (ruleNo++) + '. Đối chiếu bằng AntiFan MCP **2 vòng** trên storefront thật (kèm ?themeid=... nếu là Haravan): vòng 1 sau khi sửa xong, vòng 2 reload/cache-bust (?v=<timestamp>) rồi kiểm tra lại độc lập ở các viewport liên quan (mobile + desktop). Chỉ kết luận khi cả 2 vòng cùng đạt, kèm số đo/DOM làm bằng chứng.\n';
+      if (isHaravan) {
+        const fetchCmd = '`hrv theme fetch <bound_id> --only config/settings_data.json` (`<bound_id>` = theme_id đọc ở bước a; truyền id này ghi lại đúng giá trị cũ và chạy không cần menu chọn theme)';
+        md += (ruleNo++) + '. **Đã duyệt FULL quyền ghi `config/settings_data.json`** — phạm vi: CHỈ ' + themeScope + ', thời hạn: CHỈ issue này, không áp sang task/theme khác. Bắt buộc theo thứ tự:\n';
+        md += '   - a) Điều kiện: ' + themeGuard + '\n';
+        md += '   - b) TRƯỚC MỖI LẦN thay đổi: ' + fetchCmd + ' (đường dẫn file chính xác, không glob) để lấy remote mới nhất. Mỗi lệnh `hrv` cần user duyệt/chạy từng lần — hãy yêu cầu user chạy hoặc duyệt lệnh này, không tự chạy ngầm. Sửa lại lần nữa = fetch lại lần nữa; không sửa trên bản local cũ.\n';
+        md += '   - c) Backup bản vừa fetch kèm sha256, rồi áp thay đổi theo quy trình data-fix: patch đặt trong `deliverables/settings-patches/` + `E:/Work/tools/RESTYLE_MASTER_KIT/settings_merge.js` (`--key <id> --value <json>` hoặc manifest), không sửa tay.\n';
+        md += '   - d) Chỉ patch đúng key cần đổi, giữ nguyên key khác; số key trước/sau phải khớp (`--max-key-loss` mặc định 0). Báo rõ key đã đổi, giá trị cũ/mới, và sha256 backup.\n';
+      }
+      if (feedbackSheets.length > 0) {
+        md += (ruleNo++) + '. Sheet feedback đính kèm: ' + feedbackSheets.map(d => d.originalUrl).join(' , ') + '\n';
+        md += '   - Tìm đúng dòng bằng cách đối chiếu nội dung cột Mô tả với mô tả lỗi ở trên (số Issue #' + rowNumber + ' là số của dashboard, KHÔNG phải số dòng trong sheet). Dùng đúng tab theo #gid= trong link.\n';
+        md += '   - Làm xong BẮT BUỘC ghi Dev note (nêu rõ thay đổi cụ thể, kiểu "Em đã fix ạ: ...") và đánh Stage = **Fixed**. TUYỆT ĐỐI không ghi "Done" (Done chỉ khách ghi sau nghiệm thu); không đụng dòng khách đã đánh Done; không ghi đè ô đã có nội dung.\n';
+        md += '   - Sau khi ghi, đọc lại dòng từ server (anti.sheet.extract) để xác nhận Stage + Dev note đã lưu đúng dòng.\n';
+        md += (ruleNo++) + '. Không đánh Fixed nếu chưa có bằng chứng live cả 2 vòng, hoặc kết quả còn phụ thuộc thao tác của khách/merchant, hoặc fix chưa sync lên theme; trường hợp đó để trống và báo rõ lý do.\n';
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(md).then(() => {

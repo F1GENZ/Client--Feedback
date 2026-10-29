@@ -2221,6 +2221,11 @@
         md += '   - Tìm đúng dòng bằng cách đối chiếu nội dung cột Mô tả với mô tả lỗi ở trên (số Issue #' + rowNumber + ' là số của dashboard, KHÔNG phải số dòng trong sheet). Dùng đúng tab theo #gid= trong link.\n';
         md += '   - Dev note + Stage theo skill: note ngắn 2-4 dòng ("Em đã fix ạ:", mỗi ý một dòng `- `), Stage = **Fixed**; việc còn chờ khách/Admin hoặc chưa sync theme thì ghi trong note, vẫn Fixed. TUYỆT ĐỐI không ghi "Done" (Done chỉ khách ghi sau nghiệm thu); không đụng dòng khách đã đánh Done; ghi ô luôn kèm `expectedPrevious` = giá trị đang có.\n';
         md += '   - Sau khi ghi, xác minh trên server bằng CSV export (`/export?format=csv&gid=<gid>`), so khớp chính xác toàn chuỗi Dev note và Stage đúng dòng.\n';
+      } else {
+        md += (ruleNo++) + '. Feedback không có Sheet → ghi note vào **bình luận của Issue #' + rowNumber + '** trên dashboard (' + location.origin + '/?feedback=' + rowNumber + '):\n';
+        md += '   - BẮT BUỘC gọi skill `f1genz-feedback-comment-post` (đọc `skill://f1genz-feedback-comment-post` trước khi đăng) và làm đúng quy trình trong skill: điền ô bình luận (`#newCommentText`) rồi bấm gửi qua tab AntiFan.\n';
+        md += '   - Note ngắn 2-4 dòng ("Em đã fix ạ:", mỗi ý một dòng `- `): nói rõ đã sửa gì, khách dùng/chỉnh ở đâu. Không ghi đường dẫn file, chi tiết QA, hay "Cần đồng bộ theme". Không ghi vào ô Nội dung.\n';
+        md += '   - Không đổi Stage/Deadline/Tags nếu không được yêu cầu. Sau khi đăng, reload trang xác minh note hiện đúng 1 lần.\n';
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(md).then(() => {
